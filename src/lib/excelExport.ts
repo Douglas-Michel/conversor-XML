@@ -17,24 +17,23 @@ export function exportToExcel(notas: NotaFiscal[], fileName: string = 'notas_fis
     'Nº NF-e': nota.tipo === 'NF-e' ? nota.numero : '',
     'Nº CT-e': nota.numeroCTe || nota.nfeReferenciada || '',
     'Valor': nota.valorTotal,
-    // Alíq. PIS: valor numérico convertido para decimal (1.65 -> 0.0165) para manter formatação percentual no Excel
+    // Exportar alíquotas como valores decimais (ex.: 1.65 -> 0.0165) e aplicar formatação percentual no Excel
     'Alíq. PIS': nota.aliquotaPIS !== undefined ? nota.aliquotaPIS / 100 : null,
-    'Alíq. PIS (%)': formatPercent(nota.aliquotaPIS),
     'PIS': nota.valorPIS,
     'P': nota.flagPIS ? 'X' : '',
-    'Alíq. COF': nota.aliquotaCOFINS,
+    'Alíq. COF': nota.aliquotaCOFINS !== undefined ? nota.aliquotaCOFINS / 100 : null,
     'COFINS': nota.valorCOFINS,
     'C': nota.flagCOFINS ? 'X' : '',
-    'Alíq. IPI': nota.aliquotaIPI,
+    'Alíq. IPI': nota.aliquotaIPI !== undefined ? nota.aliquotaIPI / 100 : null,
     'IPI': nota.valorIPI,
     'I': nota.flagIPI ? 'X' : '',
-    'Alíq. ICMS': nota.aliquotaICMS,
+    'Alíq. ICMS': nota.aliquotaICMS !== undefined ? nota.aliquotaICMS / 100 : null,
     'ICMS': nota.valorICMS,
     'IC': nota.flagICMS ? 'X' : '',
-    'Alíq. DIFAL': nota.aliquotaDIFAL,
+    'Alíq. DIFAL': nota.aliquotaDIFAL !== undefined ? nota.aliquotaDIFAL / 100 : null,
     'DIFAL': nota.valorDIFAL,
     'Ano': nota.ano,
-    'Reduz ICMS': nota.reducaoICMS,
+    'Reduz ICMS': nota.reducaoICMS !== undefined ? nota.reducaoICMS / 100 : null,
   }));
 
   const worksheet = XLSX.utils.json_to_sheet(data);
@@ -69,26 +68,21 @@ export function exportToExcel(notas: NotaFiscal[], fileName: string = 'notas_fis
     { wch: 12 },  // Nº CT-e
     { wch: 15 },  // Valor
     { wch: 10 },  // Alíq. PIS
-    { wch: 10 },  // Alíq. PIS (%)
     { wch: 12 },  // PIS
     { wch: 4 },   // P
     { wch: 10 },  // Alíq. COF
     { wch: 12 },  // COFINS
     { wch: 4 },   // C
     { wch: 10 },  // Alíq. IPI
-    { wch: 10 },  // Alíq. IPI (%)
     { wch: 12 },  // IPI
     { wch: 4 },   // I
     { wch: 10 },  // Alíq. ICMS
-    { wch: 10 },  // Alíq. ICMS (%)
     { wch: 12 },  // ICMS
     { wch: 4 },   // IC
     { wch: 10 },  // Alíq. DIFAL
-    { wch: 10 },  // Alíq. DIFAL (%)
     { wch: 12 },  // DIFAL
     { wch: 6 },   // Ano
     { wch: 10 },  // Reduz ICMS
-    { wch: 10 },  // Reduz ICMS (%)
   ];
   worksheet['!cols'] = columnWidths;
 
