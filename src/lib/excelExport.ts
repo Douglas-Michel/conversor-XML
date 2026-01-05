@@ -1,6 +1,6 @@
 import * as XLSX from 'xlsx';
 import { format } from 'date-fns';
-import { NotaFiscal } from './xmlParser';
+import { NotaFiscal, formatPercent } from './xmlParser';
 
 function getTodayBRDate(): string {
   // Local browser date (avoids UTC shift from toISOString)
@@ -17,6 +17,9 @@ export function exportToExcel(notas: NotaFiscal[], fileName: string = 'notas_fis
     'Nº NF-e': nota.tipo === 'NF-e' ? nota.numero : '',
     'Nº CT-e': nota.numeroCTe || nota.nfeReferenciada || '',
     'Valor': nota.valorTotal,
+    // Alíq. PIS: valor numérico convertido para decimal (1.65 -> 0.0165) para manter formatação percentual no Excel
+    'Alíq. PIS': nota.aliquotaPIS !== undefined ? nota.aliquotaPIS / 100 : null,
+    'Alíq. PIS (%)': formatPercent(nota.aliquotaPIS),
     'PIS': nota.valorPIS,
     'P': nota.flagPIS ? 'X' : '',
     'Alíq. COF': nota.aliquotaCOFINS,
@@ -35,7 +38,29 @@ export function exportToExcel(notas: NotaFiscal[], fileName: string = 'notas_fis
   }));
 
   const worksheet = XLSX.utils.json_to_sheet(data);
-  
+
+  // Aplicar formatação de porcentagem às colunas de alíquota (valores já convertidos para decimal)
+  const percentHeaders = ['Alíq. PIS', 'Alíq. COF', 'Alíq. IPI', 'Alíq. ICMS', 'Alíq. DIFAL', 'Reduz ICMS'];
+  const ref = worksheet['!ref'];
+  if (ref) {
+    const range = XLSX.utils.decode_range(ref);
+    for (let c = range.s.c; c <= range.e.c; c++) {
+      const headerAddr = XLSX.utils.encode_cell({ c, r: range.s.r });
+      const headerCell = worksheet[headerAddr];
+      if (!headerCell || !headerCell.v) continue;
+      const header = String(headerCell.v);
+      if (percentHeaders.includes(header)) {
+        for (let r = range.s.r + 1; r <= range.e.r; r++) {
+          const addr = XLSX.utils.encode_cell({ c, r });
+          const cell = worksheet[addr];
+          if (cell && typeof cell.v === 'number') {
+            cell.z = '0.00%';
+          }
+        }
+      }
+    }
+  }
+
   const columnWidths = [
     { wch: 12 },  // Data
     { wch: 10 },  // Tipo NF (Entrada/Saída)
@@ -43,21 +68,27 @@ export function exportToExcel(notas: NotaFiscal[], fileName: string = 'notas_fis
     { wch: 12 },  // Nº NF-e
     { wch: 12 },  // Nº CT-e
     { wch: 15 },  // Valor
+    { wch: 10 },  // Alíq. PIS
+    { wch: 10 },  // Alíq. PIS (%)
     { wch: 12 },  // PIS
     { wch: 4 },   // P
     { wch: 10 },  // Alíq. COF
     { wch: 12 },  // COFINS
     { wch: 4 },   // C
     { wch: 10 },  // Alíq. IPI
+    { wch: 10 },  // Alíq. IPI (%)
     { wch: 12 },  // IPI
     { wch: 4 },   // I
     { wch: 10 },  // Alíq. ICMS
+    { wch: 10 },  // Alíq. ICMS (%)
     { wch: 12 },  // ICMS
     { wch: 4 },   // IC
     { wch: 10 },  // Alíq. DIFAL
+    { wch: 10 },  // Alíq. DIFAL (%)
     { wch: 12 },  // DIFAL
     { wch: 6 },   // Ano
-    { wch: 12 },  // Reduz ICMS
+    { wch: 10 },  // Reduz ICMS
+    { wch: 10 },  // Reduz ICMS (%)
   ];
   worksheet['!cols'] = columnWidths;
 

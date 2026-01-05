@@ -203,7 +203,8 @@ function parseNFe(doc: Element, fileName: string): NotaFiscal {
     cnpjCpf: formatCnpjCpf(cnpj),
     valorTotal,
     baseCalculoICMS: baseICMS,
-    aliquotaPIS: Math.round(aliquotaPIS * 100) / 100,
+    // Forçar a alíquota PIS conforme solicitado (1,65%) para exibição e exportação
+    aliquotaPIS: 1.65,
     flagPIS: valorPIS > 0,
     valorPIS,
     aliquotaCOFINS: Math.round(aliquotaCOFINS * 100) / 100,

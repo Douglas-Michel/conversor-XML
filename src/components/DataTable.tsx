@@ -38,6 +38,7 @@ export function DataTable({ data }: DataTableProps) {
                 <TableHead className="font-semibold text-foreground whitespace-nowrap text-center">Nº NF-e</TableHead>
                 <TableHead className="font-semibold text-foreground whitespace-nowrap text-center">Nº CT-e</TableHead>
                 <TableHead className="font-semibold text-foreground whitespace-nowrap text-right">Valor</TableHead>
+                <TableHead className="font-semibold text-foreground whitespace-nowrap text-right">Alíq. PIS</TableHead>
                 <TableHead className="font-semibold text-foreground whitespace-nowrap text-right">PIS</TableHead>
                 <TableHead className="font-semibold text-foreground whitespace-nowrap text-center">P</TableHead>
                 <TableHead className="font-semibold text-foreground whitespace-nowrap text-right">Alíq. COF</TableHead>
@@ -86,6 +87,9 @@ export function DataTable({ data }: DataTableProps) {
                   </TableCell>
                   <TableCell className="text-right font-medium tabular-nums whitespace-nowrap">
                     {formatCurrency(nota.valorTotal)}
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums text-muted-foreground whitespace-nowrap">
+                    {formatPercent(nota.aliquotaPIS)}
                   </TableCell>
                   <TableCell className="text-right tabular-nums text-muted-foreground whitespace-nowrap">
                     {formatCurrency(nota.valorPIS)}
