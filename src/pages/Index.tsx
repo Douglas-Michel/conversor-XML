@@ -16,7 +16,27 @@ const Index = () => {
   const [searchTerm, setSearchTerm] = useState('');
 
   const handleFilesProcessed = (newNotas: NotaFiscal[]) => {
-    setNotas(prev => [...prev, ...newNotas]);
+    setNotas(prev => {
+      const updated = [...prev];
+      const toAdd: NotaFiscal[] = [];
+
+      for (const n of newNotas) {
+        if ((n as any).isCancellationFile) {
+          // Aplica cancelamento na nota existente (se encontrada)
+          const idx = updated.findIndex(p => p.chaveAcesso === n.chaveAcesso);
+          if (idx !== -1) {
+            updated[idx] = { ...updated[idx], situacao: 'Cancelada', situacaoInfo: n.situacaoInfo };
+          } else {
+            // Se não existe nota correspondente, adiciona o arquivo de cancelamento como registro visível
+            toAdd.push(n);
+          }
+        } else {
+          toAdd.push(n);
+        }
+      }
+
+      return [...updated, ...toAdd];
+    });
   };
 
   const handleClear = () => {

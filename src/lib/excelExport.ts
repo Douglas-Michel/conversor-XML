@@ -11,28 +11,31 @@ export function exportToExcel(notas: NotaFiscal[], fileName: string = 'notas_fis
   const today = getTodayBRDate();
 
   const data = notas.map((nota) => ({
-    'Data': today,
+    'Data Emissão': nota.dataEmissao || today,
+    'Data Inserção': nota.dataInsercao || today,
     'Tipo NF': nota.tipoOperacao,
     'Fornecedor/Cliente': nota.fornecedorCliente,
+    'Material': nota.material,
     'Nº NF-e': nota.tipo === 'NF-e' ? nota.numero : '',
     'Nº CT-e': nota.numeroCTe || nota.nfeReferenciada || '',
+    'Situação': nota.situacao || 'Desconhecida',
+    'Motivo / Protocolo': nota.situacaoInfo ? `${nota.situacaoInfo.cStat || ''} ${nota.situacaoInfo.xMotivo || ''} ${nota.situacaoInfo.nProt || ''}`.trim() : '',
     'Valor': nota.valorTotal,
     // Exportar alíquotas como valores decimais (ex.: 1.65 -> 0.0165) e aplicar formatação percentual no Excel
     'Alíq. PIS': nota.aliquotaPIS !== undefined ? nota.aliquotaPIS / 100 : null,
     'PIS': nota.valorPIS,
-    'P': nota.flagPIS ? 'X' : '',
+    'P': nota.verifiedPIS ? 'V' : 'X',
     'Alíq. COF': nota.aliquotaCOFINS !== undefined ? nota.aliquotaCOFINS / 100 : null,
     'COFINS': nota.valorCOFINS,
-    'C': nota.flagCOFINS ? 'X' : '',
+    'C': nota.verifiedCOFINS ? 'V' : 'X',
     'Alíq. IPI': nota.aliquotaIPI !== undefined ? nota.aliquotaIPI / 100 : null,
     'IPI': nota.valorIPI,
-    'I': nota.flagIPI ? 'X' : '',
+    'I': nota.verifiedIPI ? 'V' : 'X',
     'Alíq. ICMS': nota.aliquotaICMS !== undefined ? nota.aliquotaICMS / 100 : null,
     'ICMS': nota.valorICMS,
-    'IC': nota.flagICMS ? 'X' : '',
+    'IC': nota.verifiedICMS ? 'V' : 'X',
     'Alíq. DIFAL': nota.aliquotaDIFAL !== undefined ? nota.aliquotaDIFAL / 100 : null,
     'DIFAL': nota.valorDIFAL,
-    'Ano': nota.ano,
     'Reduz ICMS': nota.reducaoICMS !== undefined ? nota.reducaoICMS / 100 : null,
   }));
 
@@ -61,11 +64,15 @@ export function exportToExcel(notas: NotaFiscal[], fileName: string = 'notas_fis
   }
 
   const columnWidths = [
-    { wch: 12 },  // Data
+    { wch: 12 },  // Data Emissão
+    { wch: 12 },  // Data Inserção
     { wch: 10 },  // Tipo NF (Entrada/Saída)
     { wch: 40 },  // Fornecedor/Cliente
+    { wch: 40 },  // Material
     { wch: 12 },  // Nº NF-e
     { wch: 12 },  // Nº CT-e
+    { wch: 14 },  // Situação
+    { wch: 40 },  // Motivo / Protocolo
     { wch: 15 },  // Valor
     { wch: 10 },  // Alíq. PIS
     { wch: 12 },  // PIS
@@ -81,7 +88,6 @@ export function exportToExcel(notas: NotaFiscal[], fileName: string = 'notas_fis
     { wch: 4 },   // IC
     { wch: 10 },  // Alíq. DIFAL
     { wch: 12 },  // DIFAL
-    { wch: 6 },   // Ano
     { wch: 10 },  // Reduz ICMS
   ];
   worksheet['!cols'] = columnWidths;

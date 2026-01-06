@@ -30,78 +30,276 @@ export interface NotaFiscal {
   aliquotaDIFAL: number;
   valorDIFAL: number;
   // Extras
-  ano: string;
   reducaoICMS: number;
   chaveAcesso: string;
   // Documentos referenciados
   nfeReferenciada: string;
   cteReferenciado: string;
   chaveReferenciada: string;
+  // Material (descrição dos produtos) — campo novo
+  material: string;
+  // Verificação das alíquotas: true = verificado, false = discrepância
+  verifiedPIS?: boolean;
+  verifiedCOFINS?: boolean;
+  verifiedIPI?: boolean;
+  verifiedICMS?: boolean;
+  // Valores esperados calculados (para exibição/depuração)
+  expectedPIS?: number;
+  expectedCOFINS?: number;
+  expectedIPI?: number;
+  expectedICMS?: number;
+  // Data de inserção (preenchida na importação)
+  dataInsercao?: string;
+  // Situação do documento (Ativa / Cancelada / Negada / Rejeitada / Desconhecida)
+  situacao?: 'Ativa' | 'Cancelada' | 'Negada' | 'Rejeitada' | 'Desconhecida';
+  // Informações do protocolo/retorno (cStat, xMotivo, nProt)
+  situacaoInfo?: { cStat?: string; xMotivo?: string; nProt?: string };
+  // Se esse objeto veio de um arquivo de cancelamento (retCancNFe / retCancCTe)
+  isCancellationFile?: boolean;
+} 
+
+// Busca um elemento por localName (ignora namespace e case-insensitive quando necessário)
+function getElementsByLocalName(root: Element | Document | null, tagName: string): Element[] {
+  if (!root) return [];
+  const results: Element[] = [];
+  try {
+    // Tenta busca namespace-aware
+    // @ts-ignore
+    if ((root as Document).getElementsByTagNameNS) {
+      // @ts-ignore
+      const nsList = (root as Document).getElementsByTagNameNS('*', tagName);
+      if (nsList && nsList.length) {
+        for (let i = 0; i < nsList.length; i++) results.push(nsList[i]);
+        return results;
+      }
+    }
+  } catch {}
+
+  try {
+    if ((root as Element).getElementsByTagName) {
+      const coll = (root as Element).getElementsByTagName(tagName);
+      if (coll && coll.length) {
+        for (let i = 0; i < coll.length; i++) results.push(coll[i]);
+        return results;
+      }
+
+      // Fallback: percorre todos e compara localName (case-insensitive)
+      const all = (root as Element).getElementsByTagName('*');
+      for (let i = 0; i < all.length; i++) {
+        const el = all[i];
+        if (el.localName && el.localName.toLowerCase() === tagName.toLowerCase()) results.push(el);
+      }
+    }
+  } catch {}
+
+  return results;
+}
+
+function findElementByLocalName(root: Element | Document | null, tagName: string): Element | null {
+  const list = getElementsByLocalName(root, tagName);
+  return list.length > 0 ? list[0] : null;
 }
 
 function getTextContent(element: Element | null, tagName: string): string {
   if (!element) return '';
-  const node = element.getElementsByTagName(tagName)[0];
+  const node = findElementByLocalName(element, tagName);
   return node?.textContent?.trim() || '';
 }
 
 function getNumericContent(element: Element | null, tagName: string): number {
   const text = getTextContent(element, tagName);
   return parseFloat(text) || 0;
+} 
+
+// Função utilitária para comparar valores com tolerância (valor em moeda)
+function amountsClose(a: number, b: number): boolean {
+  const diff = Math.abs((a || 0) - (b || 0));
+  // Tolerância maior para reduzir falsos positivos: 1% ou R$0,10 mínimo
+  const tol = Math.max(0.1, Math.abs(b) * 0.01); // 1% ou 0.10 mínimo
+  return diff <= tol;
+}
+
+// Soma valores por item (det) para uma tag específica (ex.: vPIS, vCOFINS, vIPI, vICMS)
+function sumDetValues(doc: Element | null, tagName: string): number {
+  if (!doc) return 0;
+  const dets = getElementsByLocalName(doc, 'det');
+  let sum = 0;
+  for (let i = 0; i < dets.length; i++) {
+    const det = dets[i];
+    // procura diretamente na tag det ou dentro de prod/imposto
+    const direct = getNumericContent(det, tagName);
+    if (direct && direct > 0) {
+      sum += direct;
+      continue;
+    }
+    const prod = findElementByLocalName(det, 'prod');
+    if (prod) {
+      const nested = getNumericContent(prod, tagName);
+      if (nested && nested > 0) {
+        sum += nested;
+        continue;
+      }
+    }
+    const imp = findElementByLocalName(det, 'imposto') || det;
+    const nested2 = getNumericContent(imp, tagName);
+    if (nested2 && nested2 > 0) sum += nested2;
+  }
+  return sum;
+}
+
+// Limpa o conteúdo do XML para torná-lo mais tolerante a variações e caracteres inválidos
+function cleanXmlContent(content: string, fileName?: string): string {
+  if (!content) return content;
+  // Remove BOM
+  let s = content.replace(/^\uFEFF/, '');
+  // Remove comentários
+  s = s.replace(/<!--([\s\S]*?)-->/g, '');
+  // Remove declarações xmlns (ajuda quando namespaces atrapalham buscas simples)
+  s = s.replace(/\s+xmlns(:\w+)?="[^"]*"/g, '');
+  // Remove caracteres de controle inválidos
+  s = s.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');
+  // Escapa & soltos que não fazem parte de entidades (&amp;, &lt;, etc.)
+  s = s.replace(/&(?!#?\w+;)/g, '&amp;');
+  // Trim
+  s = s.trim();
+  return s;
 }
 
 export function parseNFeXML(xmlContent: string, fileName: string): NotaFiscal | null {
   try {
+    // Cleanup
+    xmlContent = cleanXmlContent(xmlContent, fileName);
+
     const parser = new DOMParser();
     const xmlDoc = parser.parseFromString(xmlContent, 'text/xml');
-    
-    const parserError = xmlDoc.getElementsByTagName('parsererror')[0];
+
+    // Check for parsererror in various namespaces/variants
+    const parserError = xmlDoc.getElementsByTagName('parsererror')[0] || findElementByLocalName(xmlDoc, 'parsererror');
     if (parserError) {
       console.error('XML parsing error:', parserError.textContent);
       return null;
     }
 
-    // Try multiple ways to find NF-e document (handles namespaces and variations)
-    const nfeProc = xmlDoc.getElementsByTagName('nfeProc')[0];
-    const nfe = xmlDoc.getElementsByTagName('NFe')[0] 
-      || nfeProc?.getElementsByTagName('NFe')[0]
-      || xmlDoc.querySelector('NFe')
-      || xmlDoc.querySelector('[*|NFe]');
-    
-    // Try multiple ways to find CT-e document
-    const cteProc = xmlDoc.getElementsByTagName('cteProc')[0];
-    const cte = xmlDoc.getElementsByTagName('CTe')[0] 
-      || cteProc?.getElementsByTagName('CTe')[0]
-      || xmlDoc.querySelector('CTe')
-      || xmlDoc.querySelector('[*|CTe]');
+    // Use local-name aware searches to find NF-e/CT-e
+    const nfeProc = findElementByLocalName(xmlDoc, 'nfeProc');
+    const cteProc = findElementByLocalName(xmlDoc, 'cteProc');
+
+    const nfe = findElementByLocalName(xmlDoc, 'NFe') 
+      || (nfeProc && findElementByLocalName(nfeProc, 'NFe'));
+
+    const cte = findElementByLocalName(xmlDoc, 'CTe') 
+      || (cteProc && findElementByLocalName(cteProc, 'CTe'));
+
+    // Detecta diretamente infNFe/infCte
+    const infNFe = findElementByLocalName(xmlDoc, 'infNFe');
+    const infCte = findElementByLocalName(xmlDoc, 'infCte');
 
     // Check for event XMLs (procEventoNFe, procEventoCTe) - skip them as they are not invoices
-    const isEventXML = xmlDoc.getElementsByTagName('procEventoNFe')[0] 
-      || xmlDoc.getElementsByTagName('procEventoCTe')[0]
-      || xmlDoc.getElementsByTagName('eventoCTe')[0]
-      || xmlDoc.getElementsByTagName('eventoNFe')[0];
-    
+    const isEventXML = findElementByLocalName(xmlDoc, 'procEventoNFe') 
+      || findElementByLocalName(xmlDoc, 'procEventoCTe')
+      || findElementByLocalName(xmlDoc, 'eventoCTe')
+      || findElementByLocalName(xmlDoc, 'eventoNFe');
+
+    // Check for canceled documents
+    const retCancNFe = findElementByLocalName(xmlDoc, 'retCancNFe');
+    const retCancCTe = findElementByLocalName(xmlDoc, 'retCancCTe');
+
+    // Log resumo diagnóstico para facilitar identificação de padrões
+    try {
+      const summary = {
+        hasNFe: !!nfe,
+        hasInfNFe: !!infNFe,
+        hasNFeProc: !!nfeProc,
+        hasCTe: !!cte,
+        hasInfCte: !!infCte,
+        hasCTeProc: !!cteProc,
+        isEventXML: !!isEventXML,
+        retCancNFe: !!retCancNFe,
+        retCancCTe: !!retCancCTe,
+      };
+    } catch {}
+
     if (isEventXML) {
       console.log(`Skipping event XML: ${fileName}`);
       return null;
     }
 
-    // Check for canceled documents
-    const retCancNFe = xmlDoc.getElementsByTagName('retCancNFe')[0];
-    const retCancCTe = xmlDoc.getElementsByTagName('retCancCTe')[0];
     if (retCancNFe || retCancCTe) {
-      console.log(`Skipping cancellation XML: ${fileName}`);
-      return null;
+      // Extrai info de cancelamento (retCancNFe / retCancCTe -> infCanc)
+      const cancelRoot = retCancNFe || retCancCTe;
+      const infCanc = findElementByLocalName(cancelRoot, 'infCanc') || cancelRoot;
+      const chNFe = getTextContent(infCanc, 'chNFe') || getTextContent(infCanc, 'chCTe') || '';
+      const cStat = getTextContent(infCanc, 'cStat');
+      const xMotivo = getTextContent(infCanc, 'xMotivo');
+      const nProt = getTextContent(infCanc, 'nProt');
+
+      // Retorna um objeto sinalizando que é um arquivo de cancelamento — será processado pelo caller
+      return {
+        id: crypto.randomUUID(),
+        tipo: 'NF-e',
+        tipoOperacao: 'Saída',
+        numero: '',
+        numeroCTe: '',
+        serie: '',
+        dataEmissao: '',
+        fornecedorCliente: '',
+        cnpjCpf: '',
+        valorTotal: 0,
+        baseCalculoICMS: 0,
+        aliquotaPIS: 0,
+        flagPIS: false,
+        valorPIS: 0,
+        aliquotaCOFINS: 0,
+        flagCOFINS: false,
+        valorCOFINS: 0,
+        aliquotaIPI: 0,
+        flagIPI: false,
+        valorIPI: 0,
+        aliquotaICMS: 0,
+        flagICMS: false,
+        valorICMS: 0,
+        aliquotaDIFAL: 0,
+        valorDIFAL: 0,
+        reducaoICMS: 0,
+        chaveAcesso: chNFe,
+        nfeReferenciada: '',
+        cteReferenciado: '',
+        chaveReferenciada: '',
+        material: '',
+        situacao: 'Cancelada',
+        situacaoInfo: { cStat: cStat || undefined, xMotivo: xMotivo || undefined, nProt: nProt || undefined },
+        isCancellationFile: true,
+      };
     }
 
-    // Try to find the infNFe or infCte directly if wrappers are not found
-    const infNFe = xmlDoc.getElementsByTagName('infNFe')[0];
-    const infCte = xmlDoc.getElementsByTagName('infCte')[0];
-
     if (nfe || infNFe) {
-      return parseNFe(nfe || infNFe.parentElement || xmlDoc.documentElement, fileName);
+      const target = nfe || (infNFe && infNFe.parentElement) || xmlDoc.documentElement;
+      return parseNFe(target as Element, fileName);
     } else if (cte || infCte) {
-      return parseCTe(cte || infCte.parentElement || xmlDoc.documentElement, fileName);
+      const target = cte || (infCte && infCte.parentElement) || xmlDoc.documentElement;
+      return parseCTe(target as Element, fileName);
+    }
+
+    // Fallback: tenta extrair trechos <infNFe> ou <infCte> diretamente do conteúdo bruto via regex
+    try {
+      const raw = xmlContent;
+      const infNFeMatch = raw.match(/<infNFe\b[^>]*>[\s\S]*?<\/infNFe>/i);
+      if (infNFeMatch) {
+        console.warn(`Fallback: extraído <infNFe> via regex em ${fileName}`);
+        const tempDoc = parser.parseFromString(`<root>${infNFeMatch[0]}</root>`, 'text/xml');
+        const target = findElementByLocalName(tempDoc, 'root') || tempDoc.documentElement;
+        return parseNFe(target as Element, fileName);
+      }
+
+      const infCteMatch = raw.match(/<infCte\b[^>]*>[\s\S]*?<\/infCte>/i);
+      if (infCteMatch) {
+        console.warn(`Fallback: extraído <infCte> via regex em ${fileName}`);
+        const tempDoc = parser.parseFromString(`<root>${infCteMatch[0]}</root>`, 'text/xml');
+        const target = findElementByLocalName(tempDoc, 'root') || tempDoc.documentElement;
+        return parseCTe(target as Element, fileName);
+      }
+    } catch (e) {
+      console.warn(`Erro no fallback regex para ${fileName}:`, e);
     }
 
     console.warn(`Unknown XML format in file: ${fileName}`);
@@ -110,7 +308,7 @@ export function parseNFeXML(xmlContent: string, fileName: string): NotaFiscal | 
     console.error('Error parsing XML:', error);
     return null;
   }
-}
+} 
 
 // Extrai o número do documento de uma chave de acesso de 44 dígitos
 // Posição 26-34: número do documento (9 dígitos)
@@ -120,12 +318,12 @@ function extrairNumeroDaChave(chave: string): string {
 }
 
 function parseNFe(doc: Element, fileName: string): NotaFiscal {
-  const infNFe = doc.getElementsByTagName('infNFe')[0];
-  const ide = doc.getElementsByTagName('ide')[0];
-  const emit = doc.getElementsByTagName('emit')[0];
-  const dest = doc.getElementsByTagName('dest')[0];
-  const total = doc.getElementsByTagName('total')[0];
-  const icmsTot = total?.getElementsByTagName('ICMSTot')[0];
+  const infNFe = findElementByLocalName(doc, 'infNFe');
+  const ide = findElementByLocalName(doc, 'ide');
+  const emit = findElementByLocalName(doc, 'emit');
+  const dest = findElementByLocalName(doc, 'dest');
+  const total = findElementByLocalName(doc, 'total');
+  const icmsTot = total ? findElementByLocalName(total, 'ICMSTot') : null;
   
   const tpNF = getTextContent(ide, 'tpNF');
   const tipoOperacao = tpNF === '0' ? 'Entrada' : 'Saída';
@@ -140,23 +338,39 @@ function parseNFe(doc: Element, fileName: string): NotaFiscal {
   const valorICMS = getNumericContent(icmsTot, 'vICMS');
   const aliquotaICMS = baseICMS > 0 ? (valorICMS / baseICMS) * 100 : 0;
 
-  const valorTotal = getNumericContent(icmsTot, 'vProd');
-  const valorPIS = getNumericContent(icmsTot, 'vPIS');
-  const valorCOFINS = getNumericContent(icmsTot, 'vCOFINS');
-  const valorIPI = getNumericContent(icmsTot, 'vIPI');
+  // Tentativas de obter o total correto: vProd, vNF (ICMSTot ou documento), ou fallback para qualquer vProd/vNF
+  const valorTotal = getNumericContent(icmsTot, 'vProd') || getNumericContent(icmsTot, 'vNF') || getNumericContent(doc, 'vNF') || getNumericContent(doc, 'vProd');
+  const valorPIS = getNumericContent(icmsTot, 'vPIS') || getNumericContent(doc, 'vPIS');
+  const valorCOFINS = getNumericContent(icmsTot, 'vCOFINS') || getNumericContent(doc, 'vCOFINS');
+  const valorIPI = getNumericContent(icmsTot, 'vIPI') || getNumericContent(doc, 'vIPI');
   const valorDIFAL = getNumericContent(icmsTot, 'vICMSUFDest') || 0;
 
   // Calculate rates based on total value
-  const aliquotaPIS = valorTotal > 0 ? (valorPIS / valorTotal) * 100 : 0;
+  // PIS: prioriza alíquota declarada no XML (pPIS) quando disponível; fallback para 1.65%
+  let declaredPISPct = 0;
+  const pisRoot = findElementByLocalName(icmsTot, 'PIS') || findElementByLocalName(doc, 'PIS');
+  if (pisRoot) {
+    declaredPISPct = getNumericContent(pisRoot, 'pPIS') || getNumericContent(findElementByLocalName(pisRoot, 'PISAliq'), 'pPIS') || 0;
+  }
+  if (!declaredPISPct) {
+    const detsForPIS = getElementsByLocalName(doc, 'det');
+    for (let i = 0; i < detsForPIS.length; i++) {
+      const p = getNumericContent(detsForPIS[i], 'pPIS');
+      if (p && p > 0) { declaredPISPct = p; break; }
+    }
+  }
+  const aliquotaPIS = declaredPISPct > 0 ? declaredPISPct : 1.65;
   const aliquotaCOFINS = valorTotal > 0 ? (valorCOFINS / valorTotal) * 100 : 0;
-  const aliquotaIPI = valorTotal > 0 ? (valorIPI / valorTotal) * 100 : 0;
+  // Preserve computed IPI but FORCE the displayed/used IPI to 3.25% per business rule
+  const FORCED_IPI = 3.25; // Não deve ser alterado para 2,60%
+  const aliquotaIPI = FORCED_IPI;
   const aliquotaDIFAL = baseICMS > 0 ? (valorDIFAL / baseICMS) * 100 : 0;
 
   // Redução ICMS (pRedBC)
-  const dets = doc.getElementsByTagName('det');
+  const dets = getElementsByLocalName(doc, 'det');
   let reducaoICMS = 0;
   if (dets.length > 0) {
-    const icmsElement = dets[0]?.getElementsByTagName('ICMS')[0];
+    const icmsElement = dets[0] ? findElementByLocalName(dets[0], 'ICMS') : null;
     if (icmsElement) {
       const icmsChild = icmsElement.children[0];
       reducaoICMS = getNumericContent(icmsChild, 'pRedBC');
@@ -164,14 +378,28 @@ function parseNFe(doc: Element, fileName: string): NotaFiscal {
   }
 
   const dataStr = getTextContent(ide, 'dhEmi') || getTextContent(ide, 'dEmi');
-  const ano = dataStr ? dataStr.substring(0, 4) : '';
+
+  // Protocolo / situação (protNFe -> infProt)
+  const prot = findElementByLocalName(doc, 'protNFe') || findElementByLocalName(doc.ownerDocument, 'protNFe') || null;
+  const infProt = prot ? (findElementByLocalName(prot, 'infProt') || prot) : null;
+  const cStat = getTextContent(infProt, 'cStat');
+  const xMotivo = getTextContent(infProt, 'xMotivo');
+  const nProt = getTextContent(infProt, 'nProt');
+
+  let situacao: 'Ativa' | 'Cancelada' | 'Negada' | 'Rejeitada' | 'Desconhecida' = 'Desconhecida';
+  if (cStat === '100') situacao = 'Ativa';
+  else if (cStat === '101') situacao = 'Cancelada';
+  else if (cStat && cStat.startsWith('3')) situacao = 'Negada';
+  else if (cStat && cStat !== '100') situacao = 'Rejeitada';
+
+  const situacaoInfo = cStat || xMotivo || nProt ? { cStat: cStat || undefined, xMotivo: xMotivo || undefined, nProt: nProt || undefined } : undefined;
 
   // Buscar documentos referenciados (NFref)
   let nfeReferenciada = '';
   let cteReferenciado = '';
   let chaveReferenciada = '';
   
-  const nfRefs = ide?.getElementsByTagName('NFref');
+  const nfRefs = getElementsByLocalName(ide, 'NFref');
   if (nfRefs && nfRefs.length > 0) {
     for (let i = 0; i < nfRefs.length; i++) {
       const nfRef = nfRefs[i];
@@ -191,6 +419,42 @@ function parseNFe(doc: Element, fileName: string): NotaFiscal {
     }
   }
 
+  // Extrair materiais (nomes dos produtos) de det > prod > xProd
+  const detsList = getElementsByLocalName(doc, 'det');
+  const materiais: string[] = [];
+  for (let i = 0; i < detsList.length; i++) {
+    const det = detsList[i];
+    const prod = findElementByLocalName(det, 'prod');
+    const nomeProd = prod ? getTextContent(prod, 'xProd') : getTextContent(det, 'xProd');
+    if (nomeProd) materiais.push(nomeProd);
+  }
+  // Remove duplicatas e limita a 3 itens para exibição
+  const unique = Array.from(new Set(materiais)).filter(Boolean);
+  const material = unique.length === 0 ? '' : (unique.length <= 3 ? unique.join('; ') : `${unique.slice(0,3).join('; ')}...`);
+
+  // Determinar valores esperados usando soma por item quando disponível
+  const sumPIS = sumDetValues(doc, 'vPIS');
+  const expectedPIS = sumPIS > 0 ? sumPIS : (valorTotal * (aliquotaPIS / 100));
+  const verifiedPIS = amountsClose(valorPIS, expectedPIS);
+  if (!verifiedPIS) console.debug(`PIS mismatch (${fileName}): actual=${valorPIS.toFixed(2)} expected=${expectedPIS.toFixed(2)} total=${valorTotal.toFixed(2)}`);
+
+  const sumCOF = sumDetValues(doc, 'vCOFINS');
+  const expectedCOFINS = sumCOF > 0 ? sumCOF : valorTotal * (aliquotaCOFINS / 100);
+  const verifiedCOFINS = amountsClose(valorCOFINS, expectedCOFINS);
+  if (!verifiedCOFINS) console.debug(`COFINS mismatch (${fileName}): actual=${valorCOFINS.toFixed(2)} expected=${expectedCOFINS.toFixed(2)} total=${valorTotal.toFixed(2)} aliquota=${aliquotaCOFINS}`);
+
+  // IPI: prioriza soma por item vIPI quando disponível; caso contrário usa aliquota forçada
+  const sumIPI = sumDetValues(doc, 'vIPI');
+  const expectedIPI = sumIPI > 0 ? sumIPI : (valorTotal * (aliquotaIPI / 100));
+  const verifiedIPI = amountsClose(valorIPI, expectedIPI);
+  if (!verifiedIPI) console.debug(`IPI mismatch (${fileName}): actual=${valorIPI.toFixed(2)} expected=${expectedIPI.toFixed(2)} total=${valorTotal.toFixed(2)}`);
+
+  // ICMS: prioriza soma por item (vICMS) se presente, caso contrário usa baseCalculo * aliquota
+  const sumICMS = sumDetValues(doc, 'vICMS');
+  const expectedICMS = sumICMS > 0 ? sumICMS : (baseICMS > 0 ? baseICMS * (aliquotaICMS / 100) : 0);
+  const verifiedICMS = amountsClose(valorICMS, expectedICMS);
+  if (!verifiedICMS) console.debug(`ICMS mismatch (${fileName}): actual=${valorICMS.toFixed(2)} expected=${expectedICMS.toFixed(2)} base=${baseICMS.toFixed(2)} aliquota=${aliquotaICMS}`);
+
   return {
     id: crypto.randomUUID(),
     tipo: 'NF-e',
@@ -203,13 +467,14 @@ function parseNFe(doc: Element, fileName: string): NotaFiscal {
     cnpjCpf: formatCnpjCpf(cnpj),
     valorTotal,
     baseCalculoICMS: baseICMS,
-    // Forçar a alíquota PIS conforme solicitado (1,65%) para exibição e exportação
-    aliquotaPIS: 1.65,
+    // Alíquota PIS: extraída do XML quando disponível; fallback 1,65%
+    aliquotaPIS: Math.round(aliquotaPIS * 100) / 100,
     flagPIS: valorPIS > 0,
     valorPIS,
     aliquotaCOFINS: Math.round(aliquotaCOFINS * 100) / 100,
     flagCOFINS: valorCOFINS > 0,
     valorCOFINS,
+    // Forçar alíquota IPI para 3,25% (regra do cliente)
     aliquotaIPI: Math.round(aliquotaIPI * 100) / 100,
     flagIPI: valorIPI > 0,
     valorIPI,
@@ -218,23 +483,38 @@ function parseNFe(doc: Element, fileName: string): NotaFiscal {
     valorICMS,
     aliquotaDIFAL: Math.round(aliquotaDIFAL * 100) / 100,
     valorDIFAL,
-    ano,
     reducaoICMS,
     chaveAcesso,
     nfeReferenciada,
     cteReferenciado,
     chaveReferenciada,
+    material,
+    // Data de inserção (vazia inicialmente — será preenchida na importação)
+    dataInsercao: '',
+    // Expected values for debugging/UI
+    expectedPIS,
+    expectedCOFINS,
+    expectedIPI,
+    expectedICMS,
+    // Flags de verificação
+    verifiedPIS,
+    verifiedCOFINS,
+    verifiedIPI,
+    verifiedICMS,
+    // Situação extraída do protocolo (quando disponível)
+    situacao,
+    situacaoInfo,
   };
-}
+} 
 
 function parseCTe(doc: Element, fileName: string): NotaFiscal {
-  const infCte = doc.getElementsByTagName('infCte')[0];
-  const ide = doc.getElementsByTagName('ide')[0];
-  const emit = doc.getElementsByTagName('emit')[0];
-  const rem = doc.getElementsByTagName('rem')[0];
-  const vPrest = doc.getElementsByTagName('vPrest')[0];
-  const imp = doc.getElementsByTagName('imp')[0];
-  const icms = imp?.getElementsByTagName('ICMS')[0];
+  const infCte = findElementByLocalName(doc, 'infCte');
+  const ide = findElementByLocalName(doc, 'ide');
+  const emit = findElementByLocalName(doc, 'emit');
+  const rem = findElementByLocalName(doc, 'rem');
+  const vPrest = findElementByLocalName(doc, 'vPrest');
+  const imp = findElementByLocalName(doc, 'imp');
+  const icms = imp ? findElementByLocalName(imp, 'ICMS') : null;
   
   const tpCTe = getTextContent(ide, 'tpCTe');
   const tipoOperacao = tpCTe === '1' ? 'Entrada' : 'Saída';
@@ -255,21 +535,38 @@ function parseCTe(doc: Element, fileName: string): NotaFiscal {
   const valorPIS = getNumericContent(imp, 'vPIS') || 0;
   const valorCOFINS = getNumericContent(imp, 'vCOFINS') || 0;
   const valorDIFAL = getNumericContent(icmsChild, 'vICMSUFDest') || 0;
+  // IPI em CT-e (quando houver)
+  const valorIPI = getNumericContent(imp, 'vIPI') || 0;
+  const aliquotaIPI = 3.25; // regra de negócio: 3,25%
 
   const aliquotaPIS = valorTotal > 0 ? (valorPIS / valorTotal) * 100 : 0;
   const aliquotaCOFINS = valorTotal > 0 ? (valorCOFINS / valorTotal) * 100 : 0;
   const aliquotaDIFAL = baseICMS > 0 ? (valorDIFAL / baseICMS) * 100 : 0;
 
   const dataStr = getTextContent(ide, 'dhEmi') || getTextContent(ide, 'dEmi');
-  const ano = dataStr ? dataStr.substring(0, 4) : '';
+
+  // Protocolo / situação para CT-e (protCTe -> infProt)
+  const prot = findElementByLocalName(doc, 'protCTe') || findElementByLocalName(doc.ownerDocument, 'protCTe') || null;
+  const infProt = prot ? (findElementByLocalName(prot, 'infProt') || prot) : null;
+  const cStat = getTextContent(infProt, 'cStat');
+  const xMotivo = getTextContent(infProt, 'xMotivo');
+  const nProt = getTextContent(infProt, 'nProt');
+
+  let situacao: 'Ativa' | 'Cancelada' | 'Negada' | 'Rejeitada' | 'Desconhecida' = 'Desconhecida';
+  if (cStat === '100') situacao = 'Ativa';
+  else if (cStat === '101') situacao = 'Cancelada';
+  else if (cStat && cStat.startsWith('3')) situacao = 'Negada';
+  else if (cStat && cStat !== '100') situacao = 'Rejeitada';
+
+  const situacaoInfo = cStat || xMotivo || nProt ? { cStat: cStat || undefined, xMotivo: xMotivo || undefined, nProt: nProt || undefined } : undefined;
 
   // Buscar NF-e referenciada no CT-e (infDoc > infNFe > chave)
   let nfeReferenciada = '';
   let chaveReferenciada = '';
   
-  const infDoc = doc.getElementsByTagName('infDoc')[0];
+  const infDoc = findElementByLocalName(doc, 'infDoc');
   if (infDoc) {
-    const infNFe = infDoc.getElementsByTagName('infNFe')[0];
+    const infNFe = findElementByLocalName(infDoc, 'infNFe');
     if (infNFe) {
       const chave = getTextContent(infNFe, 'chave');
       if (chave) {
@@ -278,6 +575,31 @@ function parseCTe(doc: Element, fileName: string): NotaFiscal {
       }
     }
   }
+
+  // Para CT-e, geralmente não há produtos listados; tentamos extrair se houver infDoc > infNFe > chave
+  const detsList = getElementsByLocalName(doc, 'det');
+  const materiais: string[] = [];
+  for (let i = 0; i < detsList.length; i++) {
+    const det = detsList[i];
+    const prod = findElementByLocalName(det, 'prod');
+    const nomeProd = prod ? getTextContent(prod, 'xProd') : getTextContent(det, 'xProd');
+    if (nomeProd) materiais.push(nomeProd);
+  }
+  const unique = Array.from(new Set(materiais)).filter(Boolean);
+  const material = unique.length === 0 ? '' : (unique.length <= 3 ? unique.join('; ') : `${unique.slice(0,3).join('; ')}...`);
+
+  // Verificações de consistência das alíquotas (CTe)
+  const expectedPIS = valorTotal * (aliquotaPIS / 100);
+  const verifiedPIS = amountsClose(valorPIS, expectedPIS);
+
+  const expectedCOFINS = valorTotal * (aliquotaCOFINS / 100);
+  const verifiedCOFINS = amountsClose(valorCOFINS, expectedCOFINS);
+
+  const expectedIPI = valorTotal * (aliquotaIPI / 100);
+  const verifiedIPI = amountsClose(valorIPI, expectedIPI);
+
+  const expectedICMS = baseICMS > 0 ? baseICMS * (aliquotaICMS / 100) : 0;
+  const verifiedICMS = amountsClose(valorICMS, expectedICMS);
 
   return {
     id: crypto.randomUUID(),
@@ -297,7 +619,8 @@ function parseCTe(doc: Element, fileName: string): NotaFiscal {
     aliquotaCOFINS: Math.round(aliquotaCOFINS * 100) / 100,
     flagCOFINS: valorCOFINS > 0,
     valorCOFINS,
-    aliquotaIPI: 0,
+    // Forçar alíquota IPI para 3,25% (regra do cliente)
+    aliquotaIPI: 3.25,
     flagIPI: false,
     valorIPI: 0,
     aliquotaICMS,
@@ -305,14 +628,28 @@ function parseCTe(doc: Element, fileName: string): NotaFiscal {
     valorICMS,
     aliquotaDIFAL: Math.round(aliquotaDIFAL * 100) / 100,
     valorDIFAL,
-    ano,
     reducaoICMS,
     chaveAcesso,
     nfeReferenciada,
     cteReferenciado: '',
     chaveReferenciada,
+    material,
+    // Data de inserção (vazia inicialmente — será preenchida na importação)
+    dataInsercao: '',
+    // Expected values
+    expectedPIS,
+    expectedCOFINS,
+    expectedIPI,
+    expectedICMS,
+    // Flags de verificação
+    verifiedPIS,
+    verifiedCOFINS,
+    verifiedIPI,
+    verifiedICMS,
+    situacao,
+    situacaoInfo,
   };
-}
+} 
 
 function formatDate(dateStr: string): string {
   if (!dateStr) return '';

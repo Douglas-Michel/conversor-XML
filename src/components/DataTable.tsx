@@ -2,6 +2,7 @@ import { motion } from 'framer-motion';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { NotaFiscal, formatCurrency, formatPercent } from '@/lib/xmlParser';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import {
   Table,
   TableBody,
@@ -32,9 +33,12 @@ export function DataTable({ data }: DataTableProps) {
           <Table>
             <TableHeader>
               <TableRow className="bg-muted/50 hover:bg-muted/50">
-                <TableHead className="font-semibold text-foreground whitespace-nowrap text-center">Data</TableHead>
-                <TableHead className="font-semibold text-foreground whitespace-nowrap text-center">Tipo NF</TableHead>
+                <TableHead className="font-semibold text-foreground whitespace-nowrap text-center">Data Emissão</TableHead>
+                <TableHead className="font-semibold text-foreground whitespace-nowrap text-center">Data Inserção</TableHead>
+                <TableHead className="font-semibold text-foreground whitespace-nowrap text-center">Situação</TableHead>
+                <TableHead className="font-semibold text-foreground whitespace-nowrap text-center">Tipo NF</TableHead> 
                 <TableHead className="font-semibold text-foreground whitespace-nowrap">Fornecedor/Cliente</TableHead>
+                <TableHead className="font-semibold text-foreground whitespace-nowrap">Material</TableHead>
                 <TableHead className="font-semibold text-foreground whitespace-nowrap text-center">Nº NF-e</TableHead>
                 <TableHead className="font-semibold text-foreground whitespace-nowrap text-center">Nº CT-e</TableHead>
                 <TableHead className="font-semibold text-foreground whitespace-nowrap text-right">Valor</TableHead>
@@ -52,7 +56,6 @@ export function DataTable({ data }: DataTableProps) {
                 <TableHead className="font-semibold text-foreground whitespace-nowrap text-center">IC</TableHead>
                 <TableHead className="font-semibold text-foreground whitespace-nowrap text-right">Alíq. DIFAL</TableHead>
                 <TableHead className="font-semibold text-foreground whitespace-nowrap text-right">DIFAL</TableHead>
-                <TableHead className="font-semibold text-foreground whitespace-nowrap text-center">Ano</TableHead>
                 <TableHead className="font-semibold text-foreground whitespace-nowrap text-right">Reduz ICMS</TableHead>
               </TableRow>
             </TableHeader>
@@ -66,7 +69,28 @@ export function DataTable({ data }: DataTableProps) {
                   className="group hover:bg-muted/30 transition-colors"
                 >
                   <TableCell className="text-sm text-muted-foreground text-center whitespace-nowrap">
-                    {format(new Date(), "dd/MMM", { locale: ptBR })}
+                    {nota.dataEmissao}
+                  </TableCell>
+                  <TableCell className="text-sm text-muted-foreground text-center whitespace-nowrap">
+                    {nota.dataInsercao || ''}
+                  </TableCell>
+                  <TableCell className="text-center">
+                    <Tooltip>
+                      <TooltipTrigger>
+                        <span className={
+                          nota.situacao === 'Ativa' ? 'text-success' : nota.situacao === 'Cancelada' ? 'text-destructive' : nota.situacao === 'Negada' ? 'text-destructive' : 'text-muted-foreground'
+                        }>
+                          {nota.situacao || 'Desconhecida'}
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <div className="text-sm">
+                          <div><strong>Código:</strong> {nota.situacaoInfo?.cStat || '—'}</div>
+                          <div><strong>Motivo:</strong> {nota.situacaoInfo?.xMotivo || '—'}</div>
+                          <div><strong>Protocolo:</strong> {nota.situacaoInfo?.nProt || '—'}</div>
+                        </div>
+                      </TooltipContent>
+                    </Tooltip>
                   </TableCell>
                   <TableCell className="text-center">
                     <Badge 
@@ -75,9 +99,12 @@ export function DataTable({ data }: DataTableProps) {
                     >
                       {nota.tipoOperacao}
                     </Badge>
-                  </TableCell>
+                  </TableCell> 
                   <TableCell className="max-w-[250px] truncate text-sm" title={nota.fornecedorCliente}>
                     {nota.fornecedorCliente}
+                  </TableCell>
+                  <TableCell className="max-w-[300px] truncate text-sm" title={nota.material}>
+                    {nota.material}
                   </TableCell>
                   <TableCell className="font-mono text-sm text-center">
                     {nota.tipo === 'NF-e' ? nota.numero : '-'}
@@ -85,6 +112,7 @@ export function DataTable({ data }: DataTableProps) {
                   <TableCell className="font-mono text-sm text-center">
                     {nota.numeroCTe || nota.nfeReferenciada || '-'}
                   </TableCell>
+
                   <TableCell className="text-right font-medium tabular-nums whitespace-nowrap">
                     {formatCurrency(nota.valorTotal)}
                   </TableCell>
@@ -95,7 +123,20 @@ export function DataTable({ data }: DataTableProps) {
                     {formatCurrency(nota.valorPIS)}
                   </TableCell>
                   <TableCell className="text-center">
-                    {nota.flagPIS ? '✓' : ''}
+                    <Tooltip>
+                      <TooltipTrigger>
+                        <span className={nota.verifiedPIS ? 'text-success' : 'text-destructive'}>
+                          {nota.verifiedPIS ? 'V' : 'X'}
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <div className="text-sm">
+                          <div><strong>Alíquota (XML):</strong> {formatPercent(nota.aliquotaPIS)}</div>
+                          <div><strong>Atual:</strong> {formatCurrency(nota.valorPIS)}</div>
+                          <div><strong>Esperado:</strong> {nota.expectedPIS ? formatCurrency(nota.expectedPIS) : '—'}</div>
+                        </div>
+                      </TooltipContent>
+                    </Tooltip>
                   </TableCell>
                   <TableCell className="text-right tabular-nums text-muted-foreground">
                     {formatPercent(nota.aliquotaCOFINS)}
@@ -104,7 +145,19 @@ export function DataTable({ data }: DataTableProps) {
                     {formatCurrency(nota.valorCOFINS)}
                   </TableCell>
                   <TableCell className="text-center">
-                    {nota.flagCOFINS ? '✓' : ''}
+                    <Tooltip>
+                      <TooltipTrigger>
+                        <span className={nota.verifiedCOFINS ? 'text-success' : 'text-destructive'}>
+                          {nota.verifiedCOFINS ? 'V' : 'X'}
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <div className="text-sm">
+                          <div><strong>Atual:</strong> {formatCurrency(nota.valorCOFINS)}</div>
+                          <div><strong>Esperado:</strong> {nota.expectedCOFINS ? formatCurrency(nota.expectedCOFINS) : '—'}</div>
+                        </div>
+                      </TooltipContent>
+                    </Tooltip>
                   </TableCell>
                   <TableCell className="text-right tabular-nums text-muted-foreground">
                     {formatPercent(nota.aliquotaIPI)}
@@ -113,7 +166,19 @@ export function DataTable({ data }: DataTableProps) {
                     {formatCurrency(nota.valorIPI)}
                   </TableCell>
                   <TableCell className="text-center">
-                    {nota.flagIPI ? '✓' : ''}
+                    <Tooltip>
+                      <TooltipTrigger>
+                        <span className={nota.verifiedIPI ? 'text-success' : 'text-destructive'}>
+                          {nota.verifiedIPI ? 'V' : 'X'}
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <div className="text-sm">
+                          <div><strong>Atual:</strong> {formatCurrency(nota.valorIPI)}</div>
+                          <div><strong>Esperado:</strong> {nota.expectedIPI ? formatCurrency(nota.expectedIPI) : '—'}</div>
+                        </div>
+                      </TooltipContent>
+                    </Tooltip>
                   </TableCell>
                   <TableCell className="text-right tabular-nums text-muted-foreground">
                     {formatPercent(nota.aliquotaICMS)}
@@ -122,16 +187,25 @@ export function DataTable({ data }: DataTableProps) {
                     {formatCurrency(nota.valorICMS)}
                   </TableCell>
                   <TableCell className="text-center">
-                    {nota.flagICMS ? '✓' : ''}
+                    <Tooltip>
+                      <TooltipTrigger>
+                        <span className={nota.verifiedICMS ? 'text-success' : 'text-destructive'}>
+                          {nota.verifiedICMS ? 'V' : 'X'}
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <div className="text-sm">
+                          <div><strong>Atual:</strong> {formatCurrency(nota.valorICMS)}</div>
+                          <div><strong>Esperado:</strong> {nota.expectedICMS ? formatCurrency(nota.expectedICMS) : '—'}</div>
+                        </div>
+                      </TooltipContent>
+                    </Tooltip>
                   </TableCell>
                   <TableCell className="text-right tabular-nums text-muted-foreground">
                     {formatPercent(nota.aliquotaDIFAL)}
                   </TableCell>
                   <TableCell className="text-right tabular-nums text-muted-foreground whitespace-nowrap">
                     {formatCurrency(nota.valorDIFAL)}
-                  </TableCell>
-                  <TableCell className="text-center font-mono text-sm">
-                    {nota.ano}
                   </TableCell>
                   <TableCell className="text-right tabular-nums text-muted-foreground">
                     {formatPercent(nota.reducaoICMS)}

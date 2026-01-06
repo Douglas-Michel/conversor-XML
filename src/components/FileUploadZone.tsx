@@ -18,6 +18,39 @@ export function FileUploadZone({ onFilesProcessed, isProcessing, setIsProcessing
   const [duplicates, setDuplicates] = useState<NotaFiscal[]>([]);
   const [showDuplicateDialog, setShowDuplicateDialog] = useState(false);
 
+  // Lê conteúdo de arquivo com detecção de encoding e fallback (UTF-16, ISO-8859-1). Retorna string vazia se não decodificável.
+  async function readFileContent(file: File): Promise<string> {
+    try {
+      let txt = await file.text();
+      if (txt && txt.trim()) return txt;
+
+      const ab = await file.arrayBuffer();
+      const bytes = new Uint8Array(ab);
+
+      // Detecta arquivos zip (PK signature) e pula
+      if (bytes.length >= 2 && bytes[0] === 0x50 && bytes[1] === 0x4B) {
+        console.warn(`Arquivo possivelmente compactado (zip) pulado: ${file.name}`);
+        return '';
+      }
+
+      let decoder: TextDecoder;
+      if (bytes.length >= 2 && bytes[0] === 0xFF && bytes[1] === 0xFE) decoder = new TextDecoder('utf-16le');
+      else if (bytes.length >= 2 && bytes[0] === 0xFE && bytes[1] === 0xFF) decoder = new TextDecoder('utf-16be');
+      else decoder = new TextDecoder('iso-8859-1'); // fallback
+
+      const decoded = decoder.decode(ab);
+      if (decoded && decoded.trim()) {
+        console.warn(`Arquivo ${file.name} decodificado com fallback`);
+        return decoded;
+      }
+
+      return '';
+    } catch (e) {
+      console.error(`Erro lendo arquivo ${file.name}:`, e);
+      return '';
+    }
+  }
+
   const processFiles = useCallback(async (files: FileList | File[]) => {
     setIsProcessing(true);
     setProcessedCount({ success: 0, failed: 0 });
@@ -37,12 +70,23 @@ export function FileUploadZone({ onFilesProcessed, isProcessing, setIsProcessing
 
     for (const file of xmlFiles) {
       try {
-        const content = await file.text();
+        const content = await readFileContent(file as File);
+
+        if (!content || !content.trim()) {
+          console.warn(`Conteúdo vazio/impossível de decodificar: ${file.name}`);
+          failed++;
+          setProcessedCount({ success, failed });
+          continue;
+        }
+
         const nota = parseNFeXML(content, file.name);
         if (nota) {
+          // Marca data de inserção (data do processamento/importação)
+          nota.dataInsercao = new Date().toLocaleDateString('pt-BR');
           notas.push(nota);
           success++;
         } else {
+          console.warn(`Falha ao processar/ignorar XML: ${file.name} — início do arquivo: ${content ? content.substring(0, 200).replace(/\s+/g, ' ').trim() : '[conteúdo vazio]'}`);
           failed++;
         }
       } catch (error) {
