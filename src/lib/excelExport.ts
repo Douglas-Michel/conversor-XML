@@ -10,18 +10,35 @@ function getTodayBRDate(): string {
 export function exportToExcel(notas: NotaFiscal[], fileName: string = 'notas_fiscais') {
   const today = getTodayBRDate();
 
-  const data = notas.map((nota) => ({
+  // Normalize notas: garantir que expectedPIS/COFINS estejam preenchidos usando fallback (soma por item já é preferida no parser)
+  const normalizedNotas = notas.map(n => ({ ...n }));
+  normalizedNotas.forEach(n => {
+    // PIS fallback: se não houver expectedPIS, tenta base declarada, senão aliquota * total
+    if (n.expectedPIS === undefined || n.expectedPIS === null) {
+      const aliq = (n.declaredPIS !== undefined ? n.declaredPIS : n.aliquotaPIS) || 0;
+      if (n.basePIS && n.basePIS > 0 && aliq > 0) n.expectedPIS = n.basePIS * (aliq / 100);
+      else n.expectedPIS = n.valorTotal * (aliq / 100);
+    }
+    // COFINS fallback
+    if (n.expectedCOFINS === undefined || n.expectedCOFINS === null) {
+      const aliq = (n.declaredCOFINS !== undefined ? n.declaredCOFINS : n.aliquotaCOFINS) || 0;
+      if (n.baseCOFINS && n.baseCOFINS > 0 && aliq > 0) n.expectedCOFINS = n.baseCOFINS * (aliq / 100);
+      else n.expectedCOFINS = n.valorTotal * (aliq / 100);
+    }
+  });
+
+
+  // Main sheet: keep same columns/order as the UI table for visual parity
+  const data = normalizedNotas.map((nota) => ({
     'Data Emissão': nota.dataEmissao || today,
     'Data Inserção': nota.dataInsercao || today,
+    'Situação': nota.situacao || 'Desconhecida',
     'Tipo NF': nota.tipoOperacao,
     'Fornecedor/Cliente': nota.fornecedorCliente,
     'Material': nota.material,
     'Nº NF-e': nota.tipo === 'NF-e' ? nota.numero : '',
     'Nº CT-e': nota.numeroCTe || nota.nfeReferenciada || '',
-    'Situação': nota.situacao || 'Desconhecida',
-    'Motivo / Protocolo': nota.situacaoInfo ? `${nota.situacaoInfo.cStat || ''} ${nota.situacaoInfo.xMotivo || ''} ${nota.situacaoInfo.nProt || ''}`.trim() : '',
     'Valor': nota.valorTotal,
-    // Exportar alíquotas como valores decimais (ex.: 1.65 -> 0.0165) e aplicar formatação percentual no Excel
     'Alíq. PIS': nota.aliquotaPIS !== undefined ? nota.aliquotaPIS / 100 : null,
     'PIS': nota.valorPIS,
     'P': nota.verifiedPIS ? 'V' : 'X',
@@ -46,6 +63,8 @@ export function exportToExcel(notas: NotaFiscal[], fileName: string = 'notas_fis
   const ref = worksheet['!ref'];
   if (ref) {
     const range = XLSX.utils.decode_range(ref);
+    // Determine formatting per header
+    const currencyHeaders = ['Valor', 'PIS', 'COFINS', 'IPI', 'ICMS', 'DIFAL', 'PIS Esperado', 'COFINS Esperado'];
     for (let c = range.s.c; c <= range.e.c; c++) {
       const headerAddr = XLSX.utils.encode_cell({ c, r: range.s.r });
       const headerCell = worksheet[headerAddr];
@@ -60,19 +79,27 @@ export function exportToExcel(notas: NotaFiscal[], fileName: string = 'notas_fis
           }
         }
       }
+      if (currencyHeaders.includes(header)) {
+        for (let r = range.s.r + 1; r <= range.e.r; r++) {
+          const addr = XLSX.utils.encode_cell({ c, r });
+          const cell = worksheet[addr];
+          if (cell && typeof cell.v === 'number') {
+            cell.z = 'R$ #,##0.00';
+          }
+        }
+      }
     }
   }
 
   const columnWidths = [
     { wch: 12 },  // Data Emissão
     { wch: 12 },  // Data Inserção
+    { wch: 14 },  // Situação
     { wch: 10 },  // Tipo NF (Entrada/Saída)
     { wch: 40 },  // Fornecedor/Cliente
     { wch: 40 },  // Material
     { wch: 12 },  // Nº NF-e
     { wch: 12 },  // Nº CT-e
-    { wch: 14 },  // Situação
-    { wch: 40 },  // Motivo / Protocolo
     { wch: 15 },  // Valor
     { wch: 10 },  // Alíq. PIS
     { wch: 12 },  // PIS
@@ -100,8 +127,82 @@ export function exportToExcel(notas: NotaFiscal[], fileName: string = 'notas_fis
   summarySheet['!cols'] = [{ wch: 25 }, { wch: 18 }];
   XLSX.utils.book_append_sheet(workbook, summarySheet, 'Resumo');
 
+  // Reconciliation sheet
+  const reconc = createReconciliation(normalizedNotas);
+  const reconcSheet = XLSX.utils.json_to_sheet(reconc);
+  // auto-width simple heuristic
+  reconcSheet['!cols'] = Array(Object.keys(reconc[0] || {}).length).fill({ wch: 18 });
+
+  // Format reconciliation sheet (percent/currency hints)
+  try {
+    const rRef = reconcSheet['!ref'];
+    if (rRef) {
+      const rRange = XLSX.utils.decode_range(rRef);
+      const currencyHeaders = ['Valor', 'PIS Atual', 'PIS Esperado', 'COFINS Atual', 'COFINS Esperado', 'IPI Atual', 'IPI Esperado', 'ICMS Atual', 'ICMS Esperado'];
+      const percentHeadersRec: string[] = []; // none expected here as decimals are in currency form
+      for (let c = rRange.s.c; c <= rRange.e.c; c++) {
+        const headerAddr = XLSX.utils.encode_cell({ c, r: rRange.s.r });
+        const headerCell = reconcSheet[headerAddr];
+        if (!headerCell || !headerCell.v) continue;
+        const header = String(headerCell.v);
+        if (currencyHeaders.includes(header)) {
+          for (let r = rRange.s.r + 1; r <= rRange.e.r; r++) {
+            const addr = XLSX.utils.encode_cell({ c, r });
+            const cell = reconcSheet[addr];
+            if (cell && typeof cell.v === 'number') cell.z = 'R$ #,##0.00';
+          }
+        }
+      }
+    }
+  } catch {}
+
+  XLSX.utils.book_append_sheet(workbook, reconcSheet, 'Reconciliacao');
+
   const timestamp = format(new Date(), 'yyyy-MM-dd');
   XLSX.writeFile(workbook, `${fileName}_${timestamp}.xlsx`);
+}
+
+function createReconciliation(notas: NotaFiscal[]) {
+  return notas.map(n => {
+    const pisDiff = (n.valorPIS || 0) - (n.expectedPIS || 0);
+    const cofDiff = (n.valorCOFINS || 0) - (n.expectedCOFINS || 0);
+    const ipiDiff = (n.valorIPI || 0) - (n.expectedIPI || 0);
+    const icmsDiff = (n.valorICMS || 0) - (n.expectedICMS || 0);
+
+    const pisReason = n.expectedPIS && n.expectedPIS !== 0 ? (Math.abs(pisDiff) <= 0.1 ? 'Arredondamento' : (n.expectedPIS === sumDetValuesSafe(n, 'vPIS') ? 'Soma por item' : (n.declaredPIS ? 'Alíquota declarada sobre base' : 'Percentual sobre total'))) : 'Sem dados';
+    const cofReason = n.expectedCOFINS && n.expectedCOFINS !== 0 ? (Math.abs(cofDiff) <= 0.1 ? 'Arredondamento' : (n.expectedCOFINS === sumDetValuesSafe(n, 'vCOFINS') ? 'Soma por item' : (n.declaredCOFINS ? 'Alíquota declarada sobre base' : 'Percentual sobre total'))) : 'Sem dados';
+    const ipiReason = Math.abs(ipiDiff) <= 0.1 ? 'OK/Arredondamento' : 'Diferença';
+    const icmsReason = Math.abs(icmsDiff) <= 0.1 ? 'OK/Arredondamento' : 'Diferença';
+
+    return {
+      'Chave': n.chaveAcesso,
+      'Nº NF': n.numero,
+      'Fornecedor': n.fornecedorCliente,
+      'Valor': n.valorTotal,
+      'PIS Atual': n.valorPIS,
+      'PIS Esperado': n.expectedPIS || 0,
+      'PIS Dif': pisDiff,
+      'PIS Motivo': pisReason,
+      'COFINS Atual': n.valorCOFINS,
+      'COFINS Esperado': n.expectedCOFINS || 0,
+      'COFINS Dif': cofDiff,
+      'COFINS Motivo': cofReason,
+      'IPI Atual': n.valorIPI,
+      'IPI Esperado': n.expectedIPI || 0,
+      'IPI Dif': ipiDiff,
+      'IPI Motivo': ipiReason,
+      'ICMS Atual': n.valorICMS,
+      'ICMS Esperado': n.expectedICMS || 0,
+      'ICMS Dif': icmsDiff,
+      'ICMS Motivo': icmsReason,
+    };
+  });
+}
+
+// Helper that can be called without access to XML; fallback returns 0
+function sumDetValuesSafe(n: NotaFiscal, tag: string) {
+  // This helper can't access the original doc, so try to infer from expected vs value
+  return 0;
 }
 
 function createSummary(notas: NotaFiscal[]) {

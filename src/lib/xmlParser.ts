@@ -48,6 +48,11 @@ export interface NotaFiscal {
   expectedCOFINS?: number;
   expectedIPI?: number;
   expectedICMS?: number;
+  // Bases e alíquotas declaradas no XML (quando disponíveis)
+  basePIS?: number;
+  baseCOFINS?: number;
+  declaredPIS?: number;
+  declaredCOFINS?: number;
   // Data de inserção (preenchida na importação)
   dataInsercao?: string;
   // Situação do documento (Ativa / Cancelada / Negada / Rejeitada / Desconhecida)
@@ -348,9 +353,11 @@ function parseNFe(doc: Element, fileName: string): NotaFiscal {
   // Calculate rates based on total value
   // PIS: prioriza alíquota declarada no XML (pPIS) quando disponível; fallback para 1.65%
   let declaredPISPct = 0;
+  let basePIS = 0;
   const pisRoot = findElementByLocalName(icmsTot, 'PIS') || findElementByLocalName(doc, 'PIS');
   if (pisRoot) {
     declaredPISPct = getNumericContent(pisRoot, 'pPIS') || getNumericContent(findElementByLocalName(pisRoot, 'PISAliq'), 'pPIS') || 0;
+    basePIS = getNumericContent(pisRoot, 'vBC') || getNumericContent(findElementByLocalName(pisRoot, 'PISAliq'), 'vBC') || 0;
   }
   if (!declaredPISPct) {
     const detsForPIS = getElementsByLocalName(doc, 'det');
@@ -360,7 +367,24 @@ function parseNFe(doc: Element, fileName: string): NotaFiscal {
     }
   }
   const aliquotaPIS = declaredPISPct > 0 ? declaredPISPct : 1.65;
-  const aliquotaCOFINS = valorTotal > 0 ? (valorCOFINS / valorTotal) * 100 : 0;
+
+  // COFINS: prioriza alíquota declarada no XML (pCOFINS) quando disponível
+  let declaredCOFINSPct = 0;
+  let baseCOFINS = 0;
+  const cofRoot = findElementByLocalName(icmsTot, 'COFINS') || findElementByLocalName(doc, 'COFINS');
+  if (cofRoot) {
+    declaredCOFINSPct = getNumericContent(cofRoot, 'pCOFINS') || getNumericContent(findElementByLocalName(cofRoot, 'COFINSAliq'), 'pCOFINS') || 0;
+    baseCOFINS = getNumericContent(cofRoot, 'vBC') || getNumericContent(findElementByLocalName(cofRoot, 'COFINSAliq'), 'vBC') || 0;
+  }
+  if (!declaredCOFINSPct) {
+    const detsForCOF = getElementsByLocalName(doc, 'det');
+    for (let i = 0; i < detsForCOF.length; i++) {
+      const p = getNumericContent(detsForCOF[i], 'pCOFINS');
+      if (p && p > 0) { declaredCOFINSPct = p; break; }
+    }
+  }
+  const aliquotaCOFINS = declaredCOFINSPct > 0 ? declaredCOFINSPct : (valorTotal > 0 ? (valorCOFINS / valorTotal) * 100 : 0);
+
   // Preserve computed IPI but FORCE the displayed/used IPI to 3.25% per business rule
   const FORCED_IPI = 3.25; // Não deve ser alterado para 2,60%
   const aliquotaIPI = FORCED_IPI;
@@ -434,12 +458,12 @@ function parseNFe(doc: Element, fileName: string): NotaFiscal {
 
   // Determinar valores esperados usando soma por item quando disponível
   const sumPIS = sumDetValues(doc, 'vPIS');
-  const expectedPIS = sumPIS > 0 ? sumPIS : (valorTotal * (aliquotaPIS / 100));
+  const expectedPIS = sumPIS > 0 ? sumPIS : (declaredPISPct > 0 && basePIS > 0 ? basePIS * (declaredPISPct / 100) : (valorTotal * (aliquotaPIS / 100)));
   const verifiedPIS = amountsClose(valorPIS, expectedPIS);
   if (!verifiedPIS) console.debug(`PIS mismatch (${fileName}): actual=${valorPIS.toFixed(2)} expected=${expectedPIS.toFixed(2)} total=${valorTotal.toFixed(2)}`);
 
   const sumCOF = sumDetValues(doc, 'vCOFINS');
-  const expectedCOFINS = sumCOF > 0 ? sumCOF : valorTotal * (aliquotaCOFINS / 100);
+  const expectedCOFINS = sumCOF > 0 ? sumCOF : (declaredCOFINSPct > 0 && baseCOFINS > 0 ? baseCOFINS * (declaredCOFINSPct / 100) : (valorTotal * (aliquotaCOFINS / 100)));
   const verifiedCOFINS = amountsClose(valorCOFINS, expectedCOFINS);
   if (!verifiedCOFINS) console.debug(`COFINS mismatch (${fileName}): actual=${valorCOFINS.toFixed(2)} expected=${expectedCOFINS.toFixed(2)} total=${valorTotal.toFixed(2)} aliquota=${aliquotaCOFINS}`);
 
@@ -501,6 +525,11 @@ function parseNFe(doc: Element, fileName: string): NotaFiscal {
     verifiedCOFINS,
     verifiedIPI,
     verifiedICMS,
+    // Bases e alíquotas declaradas
+    basePIS,
+    baseCOFINS,
+    declaredPIS: declaredPISPct > 0 ? Math.round(declaredPISPct * 100) / 100 : undefined,
+    declaredCOFINS: declaredCOFINSPct > 0 ? Math.round(declaredCOFINSPct * 100) / 100 : undefined,
     // Situação extraída do protocolo (quando disponível)
     situacao,
     situacaoInfo,
