@@ -30,42 +30,42 @@ export function exportToExcel(notas: NotaFiscal[], fileName: string = 'notas_fis
 
   // Main sheet: keep same columns/order as the UI table for visual parity
   const data = normalizedNotas.map((nota) => ({
-    'Data Emissão': nota.dataEmissao || today,
-    'Data Inserção': nota.dataInsercao || today,
-    'Situação': (nota.situacao || 'Desconhecida').toUpperCase(),
-    'Data Mudança': nota.dataMudancaSituacao || '',
-    'Tipo NF': nota.tipoOperacao?.toUpperCase() || '',
-    'Fornecedor/Cliente': nota.fornecedorCliente?.toUpperCase() || '',
-    'Material': nota.material?.toUpperCase() || '',
-    'Nº NF-e': nota.tipo === 'NF-e' ? nota.numero : '',
-    'Nº CT-e': nota.numeroCTe || nota.nfeReferenciada || '',
-    'Valor': nota.valorTotal,
-    'Alíq. PIS': nota.aliquotaPIS !== undefined ? nota.aliquotaPIS / 100 : null,
+    'DATA EMISSÃO': nota.dataEmissao || today,
+    'DATA INSERÇÃO': nota.dataInsercao || today,
+    'SITUAÇÃO': (nota.situacao || 'Desconhecida').toUpperCase(),
+    'DATA MUDANÇA': nota.dataMudancaSituacao || '',
+    'TIPO NF': nota.tipoOperacao?.toUpperCase() || '',
+    'FORNECEDOR/CLIENTE': nota.fornecedorCliente?.toUpperCase() || '',
+    'MATERIAL': nota.material?.toUpperCase() || '',
+    'Nº NF-E': nota.tipo === 'NF-e' ? nota.numero : '',
+    'Nº CT-E': nota.numeroCTe || nota.nfeReferenciada || '',
+    'VALOR': nota.valorTotal,
+    'ALÍQ. PIS': nota.aliquotaPIS !== undefined ? nota.aliquotaPIS / 100 : null,
     'PIS': nota.valorPIS,
     'P': nota.verifiedPIS ? 'V' : 'X',
-    'Alíq. COF': nota.aliquotaCOFINS !== undefined ? nota.aliquotaCOFINS / 100 : null,
+    'ALÍQ. COF': nota.aliquotaCOFINS !== undefined ? nota.aliquotaCOFINS / 100 : null,
     'COFINS': nota.valorCOFINS,
     'C': nota.verifiedCOFINS ? 'V' : 'X',
-    'Alíq. IPI': nota.aliquotaIPI !== undefined ? nota.aliquotaIPI / 100 : null,
+    'ALÍQ. IPI': nota.aliquotaIPI !== undefined ? nota.aliquotaIPI / 100 : null,
     'IPI': nota.valorIPI,
     'I': nota.verifiedIPI ? 'V' : 'X',
-    'Alíq. ICMS': nota.aliquotaICMS !== undefined ? nota.aliquotaICMS / 100 : null,
+    'ALÍQ. ICMS': nota.aliquotaICMS !== undefined ? nota.aliquotaICMS / 100 : null,
     'ICMS': nota.valorICMS,
     'IC': nota.verifiedICMS ? 'V' : 'X',
-    'Alíq. DIFAL': nota.aliquotaDIFAL !== undefined ? nota.aliquotaDIFAL / 100 : null,
+    'ALÍQ. DIFAL': nota.aliquotaDIFAL !== undefined ? nota.aliquotaDIFAL / 100 : null,
     'DIFAL': nota.valorDIFAL,
-    'Reduz ICMS': nota.reducaoICMS !== undefined ? nota.reducaoICMS / 100 : null,
+    'REDUZ ICMS': nota.reducaoICMS !== undefined ? nota.reducaoICMS / 100 : null,
   }));
 
   const worksheet = XLSX.utils.json_to_sheet(data);
 
   // Aplicar formatação de porcentagem às colunas de alíquota (valores já convertidos para decimal)
-  const percentHeaders = ['Alíq. PIS', 'Alíq. COF', 'Alíq. IPI', 'Alíq. ICMS', 'Alíq. DIFAL', 'Reduz ICMS'];
+  const percentHeaders = ['ALÍQ. PIS', 'ALÍQ. COF', 'ALÍQ. IPI', 'ALÍQ. ICMS', 'ALÍQ. DIFAL', 'REDUZ ICMS'];
   const ref = worksheet['!ref'];
   if (ref) {
     const range = XLSX.utils.decode_range(ref);
     // Determine formatting per header
-    const currencyHeaders = ['Valor', 'PIS', 'COFINS', 'IPI', 'ICMS', 'DIFAL', 'PIS Esperado', 'COFINS Esperado'];
+    const currencyHeaders = ['VALOR', 'PIS', 'COFINS', 'IPI', 'ICMS', 'DIFAL', 'PIS ESPERADO', 'COFINS ESPERADO'];
     for (let c = range.s.c; c <= range.e.c; c++) {
       const headerAddr = XLSX.utils.encode_cell({ c, r: range.s.r });
       const headerCell = worksheet[headerAddr];
@@ -140,7 +140,7 @@ export function exportToExcel(notas: NotaFiscal[], fileName: string = 'notas_fis
     const rRef = reconcSheet['!ref'];
     if (rRef) {
       const rRange = XLSX.utils.decode_range(rRef);
-      const currencyHeaders = ['Valor', 'PIS Atual', 'PIS Esperado', 'COFINS Atual', 'COFINS Esperado', 'IPI Atual', 'IPI Esperado', 'ICMS Atual', 'ICMS Esperado'];
+      const currencyHeaders = ['VALOR', 'PIS ATUAL', 'PIS ESPERADO', 'COFINS ATUAL', 'COFINS ESPERADO', 'IPI ATUAL', 'IPI ESPERADO', 'ICMS ATUAL', 'ICMS ESPERADO'];
       const percentHeadersRec: string[] = []; // none expected here as decimals are in currency form
       for (let c = rRange.s.c; c <= rRange.e.c; c++) {
         const headerAddr = XLSX.utils.encode_cell({ c, r: rRange.s.r });
@@ -177,26 +177,26 @@ function createReconciliation(notas: NotaFiscal[]) {
     const icmsReason = Math.abs(icmsDiff) <= 0.1 ? 'OK/ARREDONDAMENTO' : 'DIFERENÇA';
 
     return {
-      'Chave': n.chaveAcesso,
+      'CHAVE': n.chaveAcesso,
       'Nº NF': n.numero,
-      'Fornecedor': n.fornecedorCliente?.toUpperCase() || '',
-      'Valor': n.valorTotal,
-      'PIS Atual': n.valorPIS,
-      'PIS Esperado': n.expectedPIS || 0,
-      'PIS Dif': pisDiff,
-      'PIS Motivo': pisReason.toUpperCase(),
-      'COFINS Atual': n.valorCOFINS,
-      'COFINS Esperado': n.expectedCOFINS || 0,
-      'COFINS Dif': cofDiff,
-      'COFINS Motivo': cofReason.toUpperCase(),
-      'IPI Atual': n.valorIPI,
-      'IPI Esperado': n.expectedIPI || 0,
-      'IPI Dif': ipiDiff,
-      'IPI Motivo': ipiReason.toUpperCase(),
-      'ICMS Atual': n.valorICMS,
-      'ICMS Esperado': n.expectedICMS || 0,
-      'ICMS Dif': icmsDiff,
-      'ICMS Motivo': icmsReason.toUpperCase(),
+      'FORNECEDOR': n.fornecedorCliente?.toUpperCase() || '',
+      'VALOR': n.valorTotal,
+      'PIS ATUAL': n.valorPIS,
+      'PIS ESPERADO': n.expectedPIS || 0,
+      'PIS DIF': pisDiff,
+      'PIS MOTIVO': pisReason.toUpperCase(),
+      'COFINS ATUAL': n.valorCOFINS,
+      'COFINS ESPERADO': n.expectedCOFINS || 0,
+      'COFINS DIF': cofDiff,
+      'COFINS MOTIVO': cofReason.toUpperCase(),
+      'IPI ATUAL': n.valorIPI,
+      'IPI ESPERADO': n.expectedIPI || 0,
+      'IPI DIF': ipiDiff,
+      'IPI MOTIVO': ipiReason.toUpperCase(),
+      'ICMS ATUAL': n.valorICMS,
+      'ICMS ESPERADO': n.expectedICMS || 0,
+      'ICMS DIF': icmsDiff,
+      'ICMS MOTIVO': icmsReason.toUpperCase(),
     };
   });
 }
@@ -227,26 +227,26 @@ function createSummary(notas: NotaFiscal[]) {
   const totaisSaida = sumValues(saidas);
 
   return [
-    { 'Descrição': 'Total de Documentos', 'Valor': totalNotas },
-    { 'Descrição': 'Total NF-e', 'Valor': totalNFe },
-    { 'Descrição': 'Total CT-e', 'Valor': totalCTe },
-    { 'Descrição': '', 'Valor': '' },
-    { 'Descrição': '--- ENTRADAS ---', 'Valor': '' },
-    { 'Descrição': 'Qtd. Entradas', 'Valor': entradas.length },
-    { 'Descrição': 'Valor Total Entradas', 'Valor': totaisEntrada.total },
-    { 'Descrição': 'ICMS Entradas', 'Valor': totaisEntrada.icms },
-    { 'Descrição': 'PIS Entradas', 'Valor': totaisEntrada.pis },
-    { 'Descrição': 'COFINS Entradas', 'Valor': totaisEntrada.cofins },
-    { 'Descrição': 'IPI Entradas', 'Valor': totaisEntrada.ipi },
-    { 'Descrição': 'DIFAL Entradas', 'Valor': totaisEntrada.difal },
-    { 'Descrição': '', 'Valor': '' },
-    { 'Descrição': '--- SAÍDAS ---', 'Valor': '' },
-    { 'Descrição': 'Qtd. Saídas', 'Valor': saidas.length },
-    { 'Descrição': 'Valor Total Saídas', 'Valor': totaisSaida.total },
-    { 'Descrição': 'ICMS Saídas', 'Valor': totaisSaida.icms },
-    { 'Descrição': 'PIS Saídas', 'Valor': totaisSaida.pis },
-    { 'Descrição': 'COFINS Saídas', 'Valor': totaisSaida.cofins },
-    { 'Descrição': 'IPI Saídas', 'Valor': totaisSaida.ipi },
-    { 'Descrição': 'DIFAL Saídas', 'Valor': totaisSaida.difal },
+    { 'DESCRIÇÃO': 'Total de Documentos', 'VALOR': totalNotas },
+    { 'DESCRIÇÃO': 'Total NF-e', 'VALOR': totalNFe },
+    { 'DESCRIÇÃO': 'Total CT-e', 'VALOR': totalCTe },
+    { 'DESCRIÇÃO': '', 'VALOR': '' },
+    { 'DESCRIÇÃO': '--- ENTRADAS ---', 'VALOR': '' },
+    { 'DESCRIÇÃO': 'Qtd. Entradas', 'VALOR': entradas.length },
+    { 'DESCRIÇÃO': 'Valor Total Entradas', 'VALOR': totaisEntrada.total },
+    { 'DESCRIÇÃO': 'ICMS Entradas', 'VALOR': totaisEntrada.icms },
+    { 'DESCRIÇÃO': 'PIS Entradas', 'VALOR': totaisEntrada.pis },
+    { 'DESCRIÇÃO': 'COFINS Entradas', 'VALOR': totaisEntrada.cofins },
+    { 'DESCRIÇÃO': 'IPI Entradas', 'VALOR': totaisEntrada.ipi },
+    { 'DESCRIÇÃO': 'DIFAL Entradas', 'VALOR': totaisEntrada.difal },
+    { 'DESCRIÇÃO': '', 'VALOR': '' },
+    { 'DESCRIÇÃO': '--- SAÍDAS ---', 'VALOR': '' },
+    { 'DESCRIÇÃO': 'Qtd. Saídas', 'VALOR': saidas.length },
+    { 'DESCRIÇÃO': 'Valor Total Saídas', 'VALOR': totaisSaida.total },
+    { 'DESCRIÇÃO': 'ICMS Saídas', 'VALOR': totaisSaida.icms },
+    { 'DESCRIÇÃO': 'PIS Saídas', 'VALOR': totaisSaida.pis },
+    { 'DESCRIÇÃO': 'COFINS Saídas', 'VALOR': totaisSaida.cofins },
+    { 'DESCRIÇÃO': 'IPI Saídas', 'VALOR': totaisSaida.ipi },
+    { 'DESCRIÇÃO': 'DIFAL Saídas', 'VALOR': totaisSaida.difal },
   ];
 }
