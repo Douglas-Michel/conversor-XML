@@ -135,7 +135,7 @@ export function DataTable({ data }: DataTableProps) {
                       </TooltipTrigger>
                       <TooltipContent>
                         <div className="text-sm">
-                          <div><strong>Alíquota (XML):</strong> {formatPercent(nota.aliquotaPIS)}</div>
+                          <div><strong>Alíquota Calculada:</strong> {formatPercent(nota.aliquotaPIS)}</div>
                           <div><strong>Atual:</strong> {formatCurrency(nota.valorPIS)}</div>
                           <div><strong>Esperado:</strong> {nota.expectedPIS ? formatCurrency(nota.expectedPIS) : '—'}</div>
                         </div>

@@ -190,6 +190,15 @@ function isCnpjDaEmpresa(cnpj: string): boolean {
   return EMPRESA_CNPJS.some(empresaCnpj => cnpjLimpo === empresaCnpj);
 }
 
+/**
+ * Trunca um número para exatamente 2 casas decimais (sem arredondamento)
+ * @param value - Valor a ser truncado
+ * @returns Valor truncado com 2 casas decimais
+ */
+function truncateToTwoDecimals(value: number): number {
+  return Math.trunc(value * 100) / 100;
+}
+
 // ============================================================================
 // XML DOM UTILITIES
 // ============================================================================
@@ -845,13 +854,15 @@ function parseNFe(doc: Element, fileName: string): NotaFiscal {
   const pisSummary = aggregatePisCofins(doc, 'PIS');
   const basePIS = pisSummary.base || getNumericContent(findElementByLocalName(icmsTot, 'PIS') || doc, 'vBC');
   const declaredPISPct = pisSummary.declaredPctWeighted || getNumericContent(findElementByLocalName(icmsTot, 'PIS') || doc, 'pPIS');
-  const aliquotaPIS = (basePIS > 0 && valorPIS > 0) ? (valorPIS / basePIS) * 100 : (declaredPISPct || DEFAULT_PIS_RATE);
+  // Alíquota calculada: (Valor PIS ÷ Valor Total) × 100
+  const aliquotaPIS = (valorTotal > 0 && valorPIS > 0) ? (valorPIS / valorTotal) * 100 : (declaredPISPct || DEFAULT_PIS_RATE);
 
   // COFINS: cálculo análogo ao PIS
   const cofinsSummary = aggregatePisCofins(doc, 'COFINS');
   const baseCOFINS = cofinsSummary.base || getNumericContent(findElementByLocalName(icmsTot, 'COFINS') || doc, 'vBC');
   const declaredCOFINSPct = cofinsSummary.declaredPctWeighted || getNumericContent(findElementByLocalName(icmsTot, 'COFINS') || doc, 'pCOFINS');
-  const aliquotaCOFINS = (baseCOFINS > 0 && valorCOFINS > 0) ? (valorCOFINS / baseCOFINS) * 100 : (declaredCOFINSPct || DEFAULT_COFINS_RATE);
+  // Alíquota calculada: (Valor COFINS ÷ Valor Total) × 100
+  const aliquotaCOFINS = (valorTotal > 0 && valorCOFINS > 0) ? (valorCOFINS / valorTotal) * 100 : (declaredCOFINSPct || DEFAULT_COFINS_RATE);
 
   // IPI e DIFAL
   const aliquotaIPI = DEFAULT_IPI_RATE;
@@ -875,8 +886,8 @@ function parseNFe(doc: Element, fileName: string): NotaFiscal {
   const material = extractMaterials(doc);
 
   // Validações: Compara valores declarados com cálculo
-  const expectedPIS = basePIS * (aliquotaPIS / 100);
-  const expectedCOFINS = baseCOFINS * (aliquotaCOFINS / 100);
+  const expectedPIS = valorTotal * (aliquotaPIS / 100);
+  const expectedCOFINS = valorTotal * (aliquotaCOFINS / 100);
   const expectedIPI = valorTotal * (aliquotaIPI / 100);
   const expectedICMS = baseICMS * (aliquotaICMS / 100);
 
@@ -899,10 +910,10 @@ function parseNFe(doc: Element, fileName: string): NotaFiscal {
     cnpjCpf: formatCnpjCpf(cnpj),
     valorTotal,
     baseCalculoICMS: baseICMS,
-    aliquotaPIS: Math.round(aliquotaPIS * 100) / 100,
+    aliquotaPIS: truncateToTwoDecimals(aliquotaPIS),
     flagPIS: valorPIS > 0,
     valorPIS,
-    aliquotaCOFINS: Math.round(aliquotaCOFINS * 100) / 100,
+    aliquotaCOFINS: truncateToTwoDecimals(aliquotaCOFINS),
     flagCOFINS: valorCOFINS > 0,
     valorCOFINS,
     aliquotaIPI: Math.round(aliquotaIPI * 100) / 100,
@@ -1027,10 +1038,10 @@ function parseCTe(doc: Element, fileName: string): NotaFiscal {
     cnpjCpf: formatCnpjCpf(cnpj),
     valorTotal,
     baseCalculoICMS: baseICMS,
-    aliquotaPIS: Math.round(aliquotaPIS * 100) / 100,
+    aliquotaPIS: truncateToTwoDecimals(aliquotaPIS),
     flagPIS: valorPIS > 0,
     valorPIS,
-    aliquotaCOFINS: Math.round(aliquotaCOFINS * 100) / 100,
+    aliquotaCOFINS: truncateToTwoDecimals(aliquotaCOFINS),
     flagCOFINS: valorCOFINS > 0,
     valorCOFINS,
     aliquotaIPI: DEFAULT_IPI_RATE,
