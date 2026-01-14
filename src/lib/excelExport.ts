@@ -26,7 +26,7 @@ export function exportToExcel(notas: NotaFiscal[], fileName: string = 'notas_fis
       else n.expectedCOFINS = n.valorTotal * (aliq / 100);
     }
   });
-  
+
   // Main sheet: keep same columns/order as the UI table for visual parity
   const data = normalizedNotas.map((nota) => ({
     'DATA EMISSÃO': nota.dataEmissao || today,
@@ -53,13 +53,13 @@ export function exportToExcel(notas: NotaFiscal[], fileName: string = 'notas_fis
     'IC': nota.verifiedICMS ? 'V' : 'X',
     'ALÍQ. DIFAL': nota.aliquotaDIFAL !== undefined ? nota.aliquotaDIFAL / 100 : null,
     'DIFAL': nota.valorDIFAL,
-    'REDUZ ICMS': nota.reducaoICMS !== undefined ? nota.reducaoICMS / 100 : null,
+    'REDUZ ICMS': '',
   }));
 
   const worksheet = XLSX.utils.json_to_sheet(data);
 
   // Aplicar formatação de porcentagem às colunas de alíquota (valores já convertidos para decimal)
-  const percentHeaders = ['ALÍQ. PIS', 'ALÍQ. COF', 'ALÍQ. IPI', 'ALÍQ. ICMS', 'ALÍQ. DIFAL', 'REDUZ ICMS'];
+  const percentHeaders = ['ALÍQ. PIS', 'ALÍQ. COF', 'ALÍQ. IPI', 'ALÍQ. ICMS', 'ALÍQ. DIFAL'];
   const ref = worksheet['!ref'];
   if (ref) {
     const range = XLSX.utils.decode_range(ref);
