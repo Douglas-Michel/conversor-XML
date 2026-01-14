@@ -39,52 +39,66 @@ export function exportToExcel(notas: NotaFiscal[], fileName: string = 'notas_fis
     'Nº NF-E': nota.tipo === 'NF-e' ? nota.numero : '',
     'Nº CT-E': nota.numeroCTe || nota.nfeReferenciada || '',
     'VALOR': nota.valorTotal,
-    'ALÍQ. PIS': nota.aliquotaPIS !== undefined ? nota.aliquotaPIS / 100 : null,
+    'ALÍQ. PIS': nota.aliquotaPIS !== undefined ? `  ${nota.aliquotaPIS.toFixed(2)}%  ` : '',
     'PIS': nota.valorPIS,
     'P': nota.verifiedPIS ? 'V' : 'X',
-    'ALÍQ. COF': nota.aliquotaCOFINS !== undefined ? nota.aliquotaCOFINS / 100 : null,
+    'ALÍQ. COF': nota.aliquotaCOFINS !== undefined ? `  ${nota.aliquotaCOFINS.toFixed(2)}%  ` : '',
     'COFINS': nota.valorCOFINS,
     'C': nota.verifiedCOFINS ? 'V' : 'X',
-    'ALÍQ. IPI': nota.aliquotaIPI !== undefined ? nota.aliquotaIPI / 100 : null,
+    'ALÍQ. IPI': nota.aliquotaIPI !== undefined ? `  ${nota.aliquotaIPI.toFixed(2)}%  ` : '',
     'IPI': nota.valorIPI,
     'I': nota.verifiedIPI ? 'V' : 'X',
-    'ALÍQ. ICMS': nota.aliquotaICMS !== undefined ? nota.aliquotaICMS / 100 : null,
+    'ALÍQ. ICMS': nota.aliquotaICMS !== undefined ? `  ${nota.aliquotaICMS.toFixed(2)}%  ` : '',
     'ICMS': nota.valorICMS,
     'IC': nota.verifiedICMS ? 'V' : 'X',
-    'ALÍQ. DIFAL': nota.aliquotaDIFAL !== undefined ? nota.aliquotaDIFAL / 100 : null,
+    'ALÍQ. DIFAL': nota.aliquotaDIFAL !== undefined ? `  ${nota.aliquotaDIFAL.toFixed(2)}%  ` : '',
     'DIFAL': nota.valorDIFAL,
     'REDUZ ICMS': '',
   }));
 
   const worksheet = XLSX.utils.json_to_sheet(data);
 
-  // Aplicar formatação de porcentagem às colunas de alíquota (valores já convertidos para decimal)
-  const percentHeaders = ['ALÍQ. PIS', 'ALÍQ. COF', 'ALÍQ. IPI', 'ALÍQ. ICMS', 'ALÍQ. DIFAL'];
+  // Aplicar formatação às colunas
   const ref = worksheet['!ref'];
   if (ref) {
     const range = XLSX.utils.decode_range(ref);
-    // Determine formatting per header
     const currencyHeaders = ['VALOR', 'PIS', 'COFINS', 'IPI', 'ICMS', 'DIFAL', 'PIS ESPERADO', 'COFINS ESPERADO'];
+    const percentHeaders = ['ALÍQ. PIS', 'ALÍQ. COF', 'ALÍQ. IPI', 'ALÍQ. ICMS', 'ALÍQ. DIFAL'];
+    
+    // Centralizar cabeçalhos
+    for (let c = range.s.c; c <= range.e.c; c++) {
+      const headerAddr = XLSX.utils.encode_cell({ c, r: range.s.r });
+      const headerCell = worksheet[headerAddr];
+      if (headerCell) {
+        if (!headerCell.s) headerCell.s = {};
+        headerCell.s.alignment = { horizontal: 'center', vertical: 'center' };
+      }
+    }
+    
+    // Formatar valores monetários e centralizar alíquotas
     for (let c = range.s.c; c <= range.e.c; c++) {
       const headerAddr = XLSX.utils.encode_cell({ c, r: range.s.r });
       const headerCell = worksheet[headerAddr];
       if (!headerCell || !headerCell.v) continue;
       const header = String(headerCell.v);
-      if (percentHeaders.includes(header)) {
-        for (let r = range.s.r + 1; r <= range.e.r; r++) {
-          const addr = XLSX.utils.encode_cell({ c, r });
-          const cell = worksheet[addr];
-          if (cell && typeof cell.v === 'number') {
-            cell.z = '0.0000%';
-          }
-        }
-      }
+      
       if (currencyHeaders.includes(header)) {
         for (let r = range.s.r + 1; r <= range.e.r; r++) {
           const addr = XLSX.utils.encode_cell({ c, r });
           const cell = worksheet[addr];
           if (cell && typeof cell.v === 'number') {
             cell.z = 'R$ #,##0.00';
+          }
+        }
+      }
+      
+      if (percentHeaders.includes(header)) {
+        for (let r = range.s.r + 1; r <= range.e.r; r++) {
+          const addr = XLSX.utils.encode_cell({ c, r });
+          const cell = worksheet[addr];
+          if (cell) {
+            if (!cell.s) cell.s = {};
+            cell.s.alignment = { horizontal: 'center', vertical: 'center' };
           }
         }
       }
@@ -126,6 +140,21 @@ export function exportToExcel(notas: NotaFiscal[], fileName: string = 'notas_fis
   const summary = createSummary(notas);
   const summarySheet = XLSX.utils.json_to_sheet(summary);
   summarySheet['!cols'] = [{ wch: 25 }, { wch: 18 }];
+  
+  // Centralizar cabeçalhos da aba Resumo
+  const summaryRef = summarySheet['!ref'];
+  if (summaryRef) {
+    const summaryRange = XLSX.utils.decode_range(summaryRef);
+    for (let c = summaryRange.s.c; c <= summaryRange.e.c; c++) {
+      const headerAddr = XLSX.utils.encode_cell({ c, r: summaryRange.s.r });
+      const headerCell = summarySheet[headerAddr];
+      if (headerCell) {
+        if (!headerCell.s) headerCell.s = {};
+        headerCell.s.alignment = { horizontal: 'center', vertical: 'center' };
+      }
+    }
+  }
+  
   XLSX.utils.book_append_sheet(workbook, summarySheet, 'Resumo');
 
   // Reconciliation sheet
@@ -139,6 +168,17 @@ export function exportToExcel(notas: NotaFiscal[], fileName: string = 'notas_fis
     const rRef = reconcSheet['!ref'];
     if (rRef) {
       const rRange = XLSX.utils.decode_range(rRef);
+      
+      // Centralizar cabeçalhos da aba Reconciliação
+      for (let c = rRange.s.c; c <= rRange.e.c; c++) {
+        const headerAddr = XLSX.utils.encode_cell({ c, r: rRange.s.r });
+        const headerCell = reconcSheet[headerAddr];
+        if (headerCell) {
+          if (!headerCell.s) headerCell.s = {};
+          headerCell.s.alignment = { horizontal: 'center', vertical: 'center' };
+        }
+      }
+      
       const currencyHeaders = ['VALOR', 'PIS ATUAL', 'PIS ESPERADO', 'COFINS ATUAL', 'COFINS ESPERADO', 'IPI ATUAL', 'IPI ESPERADO', 'ICMS ATUAL', 'ICMS ESPERADO'];
       const percentHeadersRec: string[] = []; // none expected here as decimals are in currency form
       for (let c = rRange.s.c; c <= rRange.e.c; c++) {
@@ -160,7 +200,7 @@ export function exportToExcel(notas: NotaFiscal[], fileName: string = 'notas_fis
   XLSX.utils.book_append_sheet(workbook, reconcSheet, 'Reconciliacao');
 
   const timestamp = format(new Date(), 'yyyy-MM-dd');
-  XLSX.writeFile(workbook, `${fileName}_${timestamp}.xlsx`);
+  XLSX.writeFile(workbook, `${fileName}_${timestamp}.xlsx`, { cellStyles: true });
 }
 
 function createReconciliation(notas: NotaFiscal[]) {
