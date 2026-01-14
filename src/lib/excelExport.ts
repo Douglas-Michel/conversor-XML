@@ -31,7 +31,6 @@ export function exportToExcel(notas: NotaFiscal[], fileName: string = 'notas_fis
   const data = normalizedNotas.map((nota) => ({
     'DATA EMISSÃO': nota.dataEmissao || today,
     'TIPO NF': nota.tipoOperacao?.toUpperCase() || '',
-    'SITUAÇÃO': (nota.situacao || 'Desconhecida').toUpperCase(),
     'FORNECEDOR/CLIENTE': nota.fornecedorCliente?.toUpperCase() || '',
     'Nº NF-E': nota.tipo === 'NF-e' ? nota.numero : '',
     'MATERIAL': nota.material?.toUpperCase() || '',
@@ -52,6 +51,7 @@ export function exportToExcel(notas: NotaFiscal[], fileName: string = 'notas_fis
     'DIFAL': nota.valorDIFAL,
     'REDUZ ICMS': '',
     'DATA INSERÇÃO': nota.dataInsercao || today,
+    'SITUAÇÃO': (nota.situacao || 'Desconhecida').toUpperCase(),
     'DATA MUDANÇA': nota.dataMudancaSituacao || '',
   }));
 
@@ -107,7 +107,6 @@ export function exportToExcel(notas: NotaFiscal[], fileName: string = 'notas_fis
   const columnWidths = [
     { wch: 12 },  // Data Emissão
     { wch: 10 },  // Tipo NF
-    { wch: 14 },  // Situação
     { wch: 40 },  // Fornecedor/Cliente
     { wch: 12 },  // Nº NF-e
     { wch: 40 },  // Material
@@ -128,6 +127,7 @@ export function exportToExcel(notas: NotaFiscal[], fileName: string = 'notas_fis
     { wch: 12 },  // DIFAL
     { wch: 10 },  // Reduz ICMS
     { wch: 12 },  // Data Inserção
+    { wch: 14 },  // Situação
     { wch: 12 },  // Data Mudança
   ];
   worksheet['!cols'] = columnWidths;

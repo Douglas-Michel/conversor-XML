@@ -35,7 +35,6 @@ export function DataTable({ data }: DataTableProps) {
               <TableRow className="bg-muted/50 hover:bg-muted/50">
                 <TableHead className="font-semibold text-foreground whitespace-nowrap text-center">Data Emissão</TableHead>
                 <TableHead className="font-semibold text-foreground whitespace-nowrap text-center">Tipo NF</TableHead>
-                <TableHead className="font-semibold text-foreground whitespace-nowrap text-center">Situação</TableHead>
                 <TableHead className="font-semibold text-foreground whitespace-nowrap">Fornecedor/Cliente</TableHead>
                 <TableHead className="font-semibold text-foreground whitespace-nowrap text-center">Nº NF-e</TableHead>
                 <TableHead className="font-semibold text-foreground whitespace-nowrap">Material</TableHead>
@@ -56,6 +55,7 @@ export function DataTable({ data }: DataTableProps) {
                 <TableHead className="font-semibold text-foreground whitespace-nowrap text-right">DIFAL</TableHead>
                 <TableHead className="font-semibold text-foreground whitespace-nowrap text-right">Reduz ICMS</TableHead>
                 <TableHead className="font-semibold text-foreground whitespace-nowrap text-center">Data Inserção</TableHead>
+                <TableHead className="font-semibold text-foreground whitespace-nowrap text-center">Situação</TableHead>
                 <TableHead className="font-semibold text-foreground whitespace-nowrap text-center">Data Mudança</TableHead>
               </TableRow>
             </TableHeader>
@@ -78,24 +78,6 @@ export function DataTable({ data }: DataTableProps) {
                     >
                       {nota.tipoOperacao}
                     </Badge>
-                  </TableCell>
-                  <TableCell className="text-center">
-                    <Tooltip>
-                      <TooltipTrigger>
-                        <span className={
-                          nota.situacao === 'Ativa' ? 'text-success' : nota.situacao === 'Cancelada' ? 'text-destructive' : nota.situacao === 'Negada' ? 'text-destructive' : 'text-muted-foreground'
-                        }>
-                          {nota.situacao || 'Desconhecida'}
-                        </span>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <div className="text-sm">
-                          <div><strong>Código:</strong> {nota.situacaoInfo?.cStat || '—'}</div>
-                          <div><strong>Motivo:</strong> {nota.situacaoInfo?.xMotivo || '—'}</div>
-                          <div><strong>Protocolo:</strong> {nota.situacaoInfo?.nProt || '—'}</div>
-                        </div>
-                      </TooltipContent>
-                    </Tooltip>
                   </TableCell>
                   <TableCell className="max-w-[250px] truncate text-sm" title={nota.fornecedorCliente}>
                     {nota.fornecedorCliente}
@@ -206,6 +188,24 @@ export function DataTable({ data }: DataTableProps) {
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground text-center whitespace-nowrap">
                     {nota.dataInsercao || ''}
+                  </TableCell>
+                  <TableCell className="text-center">
+                    <Tooltip>
+                      <TooltipTrigger>
+                        <span className={
+                          nota.situacao === 'Ativa' ? 'text-success' : nota.situacao === 'Cancelada' ? 'text-destructive' : nota.situacao === 'Negada' ? 'text-destructive' : 'text-muted-foreground'
+                        }>
+                          {nota.situacao || 'Desconhecida'}
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <div className="text-sm">
+                          <div><strong>Código:</strong> {nota.situacaoInfo?.cStat || '—'}</div>
+                          <div><strong>Motivo:</strong> {nota.situacaoInfo?.xMotivo || '—'}</div>
+                          <div><strong>Protocolo:</strong> {nota.situacaoInfo?.nProt || '—'}</div>
+                        </div>
+                      </TooltipContent>
+                    </Tooltip>
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground text-center whitespace-nowrap">
                     {nota.dataMudancaSituacao || '—'}
