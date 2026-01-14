@@ -98,8 +98,10 @@ export interface NotaFiscal {
   // Bases de cálculo e alíquotas declaradas
   basePIS?: number;
   baseCOFINS?: number;
+  baseIPI?: number;
   declaredPIS?: number;
   declaredCOFINS?: number;
+  declaredIPI?: number;
   
   // Metadados
   dataInsercao?: string;
@@ -191,12 +193,13 @@ function isCnpjDaEmpresa(cnpj: string): boolean {
 }
 
 /**
- * Trunca um número para exatamente 2 casas decimais (sem arredondamento)
+ * Trunca um número para exatamente 4 casas decimais (sem arredondamento)
+ * Usado para alíquotas para mostrar precisão total
  * @param value - Valor a ser truncado
- * @returns Valor truncado com 2 casas decimais
+ * @returns Valor truncado com 4 casas decimais
  */
-function truncateToTwoDecimals(value: number): number {
-  return Math.trunc(value * 100) / 100;
+function truncateToFourDecimals(value: number): number {
+  return Math.trunc(value * 10000) / 10000;
 }
 
 // ============================================================================
@@ -405,6 +408,68 @@ function aggregatePisCofins(doc: Element | null, tax: 'PIS' | 'COFINS'): TaxAggr
           weightedPercentSum += percent * base;
         }
       }
+    }
+  }
+
+  const declaredPctWeighted = totalBase > 0 ? (weightedPercentSum / totalBase) : 0;
+  
+  return { 
+    base: totalBase, 
+    value: totalValue, 
+    declaredPctWeighted 
+  };
+}
+
+/**
+ * Agrega bases e valores de IPI considerando diferentes regimes tributários
+ * Calcula alíquota média ponderada pela base de cálculo
+ * 
+ * Regimes suportados:
+ * - IPITrib: IPI Tributado (alíquota sobre base)
+ * - IPINT: IPI Não Tributado
+ * 
+ * @param doc - Documento XML
+ * @returns Agregação com base, valor total e alíquota ponderada
+ */
+function aggregateIPI(doc: Element | null): TaxAggregation {
+  if (!doc) {
+    return { base: 0, value: 0, declaredPctWeighted: 0 };
+  }
+
+  let totalBase = 0;
+  let totalValue = 0;
+  let weightedPercentSum = 0;
+  
+  const dets = getElementsByLocalName(doc, 'det');
+  
+  for (const det of dets) {
+    const imp = findElementByLocalName(det, 'imposto');
+    if (!imp) continue;
+    
+    const ipiNode = findElementByLocalName(imp, 'IPI');
+    if (!ipiNode) continue;
+
+    // Processa IPI Tributado
+    const ipiTrib = findElementByLocalName(ipiNode, 'IPITrib');
+    if (ipiTrib) {
+      const value = getNumericContent(ipiTrib, 'vIPI');
+      const base = getNumericContent(ipiTrib, 'vBC');
+      const percent = getNumericContent(ipiTrib, 'pIPI');
+      
+      totalValue += value;
+      
+      if (base > 0) {
+        totalBase += base;
+        if (percent > 0) {
+          weightedPercentSum += percent * base;
+        }
+      }
+    }
+    
+    // IPI Não Tributado também pode ter valor
+    const ipiNT = findElementByLocalName(ipiNode, 'IPINT');
+    if (ipiNT) {
+      totalValue += getNumericContent(ipiNT, 'vIPI');
     }
   }
 
@@ -864,8 +929,18 @@ function parseNFe(doc: Element, fileName: string): NotaFiscal {
   // Alíquota calculada: (Valor COFINS ÷ Valor Total) × 100
   const aliquotaCOFINS = (valorTotal > 0 && valorCOFINS > 0) ? (valorCOFINS / valorTotal) * 100 : (declaredCOFINSPct || DEFAULT_COFINS_RATE);
 
-  // IPI e DIFAL
-  const aliquotaIPI = DEFAULT_IPI_RATE;
+  // IPI: extração da alíquota real do XML
+  const ipiSummary = aggregateIPI(doc);
+  const baseIPI = ipiSummary.base;
+  const declaredIPIPct = ipiSummary.declaredPctWeighted;
+  // Usa alíquota declarada no XML, fallback para cálculo reverso, depois padrão
+  const aliquotaIPI = declaredIPIPct > 0 
+    ? declaredIPIPct 
+    : (baseIPI > 0 && valorIPI > 0) 
+      ? (valorIPI / baseIPI) * 100 
+      : DEFAULT_IPI_RATE;
+
+  // DIFAL
   const aliquotaDIFAL = baseICMS > 0 ? (valorDIFAL / baseICMS) * 100 : 0;
 
   // Redução ICMS do primeiro item
@@ -910,19 +985,19 @@ function parseNFe(doc: Element, fileName: string): NotaFiscal {
     cnpjCpf: formatCnpjCpf(cnpj),
     valorTotal,
     baseCalculoICMS: baseICMS,
-    aliquotaPIS: truncateToTwoDecimals(aliquotaPIS),
+    aliquotaPIS: truncateToFourDecimals(aliquotaPIS),
     flagPIS: valorPIS > 0,
     valorPIS,
-    aliquotaCOFINS: truncateToTwoDecimals(aliquotaCOFINS),
+    aliquotaCOFINS: truncateToFourDecimals(aliquotaCOFINS),
     flagCOFINS: valorCOFINS > 0,
     valorCOFINS,
-    aliquotaIPI: Math.round(aliquotaIPI * 100) / 100,
+    aliquotaIPI: truncateToFourDecimals(aliquotaIPI),
     flagIPI: valorIPI > 0,
     valorIPI,
-    aliquotaICMS: Math.round(aliquotaICMS * 100) / 100,
+    aliquotaICMS: truncateToFourDecimals(aliquotaICMS),
     flagICMS: valorICMS > 0,
     valorICMS,
-    aliquotaDIFAL: Math.round(aliquotaDIFAL * 100) / 100,
+    aliquotaDIFAL: truncateToFourDecimals(aliquotaDIFAL),
     valorDIFAL,
     reducaoICMS,
     chaveAcesso,
@@ -939,8 +1014,10 @@ function parseNFe(doc: Element, fileName: string): NotaFiscal {
     expectedICMS,
     basePIS,
     baseCOFINS,
+    baseIPI,
     declaredPIS: declaredPISPct > 0 ? Math.round(declaredPISPct * 100) / 100 : undefined,
     declaredCOFINS: declaredCOFINSPct > 0 ? Math.round(declaredCOFINSPct * 100) / 100 : undefined,
+    declaredIPI: declaredIPIPct > 0 ? Math.round(declaredIPIPct * 100) / 100 : undefined,
     situacao,
     situacaoInfo,
     dataMudancaSituacao,
@@ -1038,10 +1115,10 @@ function parseCTe(doc: Element, fileName: string): NotaFiscal {
     cnpjCpf: formatCnpjCpf(cnpj),
     valorTotal,
     baseCalculoICMS: baseICMS,
-    aliquotaPIS: truncateToTwoDecimals(aliquotaPIS),
+    aliquotaPIS: truncateToFourDecimals(aliquotaPIS),
     flagPIS: valorPIS > 0,
     valorPIS,
-    aliquotaCOFINS: truncateToTwoDecimals(aliquotaCOFINS),
+    aliquotaCOFINS: truncateToFourDecimals(aliquotaCOFINS),
     flagCOFINS: valorCOFINS > 0,
     valorCOFINS,
     aliquotaIPI: DEFAULT_IPI_RATE,
@@ -1050,7 +1127,7 @@ function parseCTe(doc: Element, fileName: string): NotaFiscal {
     aliquotaICMS,
     flagICMS: valorICMS > 0,
     valorICMS,
-    aliquotaDIFAL: Math.round(aliquotaDIFAL * 100) / 100,
+    aliquotaDIFAL: truncateToFourDecimals(aliquotaDIFAL),
     valorDIFAL,
     reducaoICMS,
     chaveAcesso,

@@ -26,8 +26,7 @@ export function exportToExcel(notas: NotaFiscal[], fileName: string = 'notas_fis
       else n.expectedCOFINS = n.valorTotal * (aliq / 100);
     }
   });
-
-
+  
   // Main sheet: keep same columns/order as the UI table for visual parity
   const data = normalizedNotas.map((nota) => ({
     'DATA EMISSÃO': nota.dataEmissao || today,
@@ -76,7 +75,7 @@ export function exportToExcel(notas: NotaFiscal[], fileName: string = 'notas_fis
           const addr = XLSX.utils.encode_cell({ c, r });
           const cell = worksheet[addr];
           if (cell && typeof cell.v === 'number') {
-            cell.z = '0.00%';
+            cell.z = '0.0000%';
           }
         }
       }
@@ -186,7 +185,7 @@ function createReconciliation(notas: NotaFiscal[]) {
       'PIS DIF': pisDiff,
       'PIS MOTIVO': pisReason.toUpperCase(),
       'COFINS ATUAL': n.valorCOFINS,
-      'COFINS ESPERADO': n.expectedCOFINS || 0,
+         'COFINS ESPERADO': n.expectedCOFINS || 0,
       'COFINS DIF': cofDiff,
       'COFINS MOTIVO': cofReason.toUpperCase(),
       'IPI ATUAL': n.valorIPI,
