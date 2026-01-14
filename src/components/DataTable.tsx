@@ -34,6 +34,7 @@ export function DataTable({ data }: DataTableProps) {
             <TableHeader>
               <TableRow className="bg-muted/50 hover:bg-muted/50">
                 <TableHead className="font-semibold text-foreground whitespace-nowrap text-center">Data Emissão</TableHead>
+                <TableHead className="font-semibold text-foreground whitespace-nowrap text-center">Tipo NF</TableHead>
                 <TableHead className="font-semibold text-foreground whitespace-nowrap text-center">Situação</TableHead>
                 <TableHead className="font-semibold text-foreground whitespace-nowrap">Fornecedor/Cliente</TableHead>
                 <TableHead className="font-semibold text-foreground whitespace-nowrap text-center">Nº NF-e</TableHead>
@@ -56,7 +57,6 @@ export function DataTable({ data }: DataTableProps) {
                 <TableHead className="font-semibold text-foreground whitespace-nowrap text-right">Reduz ICMS</TableHead>
                 <TableHead className="font-semibold text-foreground whitespace-nowrap text-center">Data Inserção</TableHead>
                 <TableHead className="font-semibold text-foreground whitespace-nowrap text-center">Data Mudança</TableHead>
-                <TableHead className="font-semibold text-foreground whitespace-nowrap text-center">Tipo NF</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -70,6 +70,14 @@ export function DataTable({ data }: DataTableProps) {
                 >
                   <TableCell className="text-sm text-muted-foreground text-center whitespace-nowrap">
                     {nota.dataEmissao}
+                  </TableCell>
+                  <TableCell className="text-center">
+                    <Badge 
+                      variant={nota.tipoOperacao === 'Entrada' ? 'blue' : 'destructive'}
+                      className="text-xs whitespace-nowrap"
+                    >
+                      {nota.tipoOperacao}
+                    </Badge>
                   </TableCell>
                   <TableCell className="text-center">
                     <Tooltip>
@@ -201,14 +209,6 @@ export function DataTable({ data }: DataTableProps) {
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground text-center whitespace-nowrap">
                     {nota.dataMudancaSituacao || '—'}
-                  </TableCell>
-                  <TableCell className="text-center">
-                    <Badge 
-                      variant={nota.tipoOperacao === 'Entrada' ? 'blue' : 'destructive'}
-                      className="text-xs whitespace-nowrap"
-                    >
-                      {nota.tipoOperacao}
-                    </Badge>
                   </TableCell>
                 </motion.tr>
               ))}

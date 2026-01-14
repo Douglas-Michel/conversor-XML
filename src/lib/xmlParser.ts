@@ -920,15 +920,15 @@ function parseNFe(doc: Element, fileName: string): NotaFiscal {
   const pisSummary = aggregatePisCofins(doc, 'PIS');
   const basePIS = pisSummary.base || getNumericContent(findElementByLocalName(icmsTot, 'PIS') || doc, 'vBC');
   const declaredPISPct = pisSummary.declaredPctWeighted || getNumericContent(findElementByLocalName(icmsTot, 'PIS') || doc, 'pPIS');
-  // Alíquota calculada: (Valor PIS ÷ Valor Total) × 100
-  const aliquotaPIS = (valorTotal > 0 && valorPIS > 0) ? (valorPIS / valorTotal) * 100 : (declaredPISPct > 0 ? declaredPISPct : 0);
+  // Alíquota calculada: (Valor PIS ÷ Base ICMS) × 100
+  const aliquotaPIS = (baseICMS > 0 && valorPIS > 0) ? (valorPIS / baseICMS) * 100 : (declaredPISPct > 0 ? declaredPISPct : 0);
 
   // COFINS: cálculo análogo ao PIS
   const cofinsSummary = aggregatePisCofins(doc, 'COFINS');
   const baseCOFINS = cofinsSummary.base || getNumericContent(findElementByLocalName(icmsTot, 'COFINS') || doc, 'vBC');
   const declaredCOFINSPct = cofinsSummary.declaredPctWeighted || getNumericContent(findElementByLocalName(icmsTot, 'COFINS') || doc, 'pCOFINS');
-  // Alíquota calculada: (Valor COFINS ÷ Valor Total) × 100
-  const aliquotaCOFINS = (valorTotal > 0 && valorCOFINS > 0) ? (valorCOFINS / valorTotal) * 100 : (declaredCOFINSPct > 0 ? declaredCOFINSPct : 0);
+  // Alíquota calculada: (Valor COFINS ÷ Base ICMS) × 100
+  const aliquotaCOFINS = (baseICMS > 0 && valorCOFINS > 0) ? (valorCOFINS / baseICMS) * 100 : (declaredCOFINSPct > 0 ? declaredCOFINSPct : 0);
 
   // IPI: extração da alíquota real do XML
   const ipiSummary = aggregateIPI(doc);
@@ -962,9 +962,9 @@ function parseNFe(doc: Element, fileName: string): NotaFiscal {
   const material = extractMaterials(doc);
 
   // Validações: Compara valores declarados com cálculo
-  const expectedPIS = valorTotal * (aliquotaPIS / 100);
-  const expectedCOFINS = valorTotal * (aliquotaCOFINS / 100);
-  const expectedIPI = valorTotal * (aliquotaIPI / 100);
+  const expectedPIS = baseICMS * (aliquotaPIS / 100);
+  const expectedCOFINS = baseICMS * (aliquotaCOFINS / 100);
+  const expectedIPI = baseICMS * (aliquotaIPI / 100);
   const expectedICMS = baseICMS * (aliquotaICMS / 100);
 
   const tolerance = 5.0;
