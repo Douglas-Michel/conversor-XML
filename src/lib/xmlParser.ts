@@ -903,8 +903,9 @@ function parseNFe(doc: Element, fileName: string): NotaFiscal {
   const valorICMS = getNumericContent(icmsTot, 'vICMS');
   const aliquotaICMS = baseICMS > 0 ? (valorICMS / baseICMS) * 100 : 0;
 
-  // Valores totais - Usa vProd (valor dos produtos) ao invés de vNF (valor total da nota)
-  const valorTotal = getNumericContent(icmsTot, 'vProd') 
+  // Valores totais - Usa vBC (base de cálculo ICMS) que sempre tem o valor correto
+  const valorTotal = baseICMS 
+    || getNumericContent(icmsTot, 'vProd') 
     || getNumericContent(doc, 'vProd')
     || getNumericContent(icmsTot, 'vNF') 
     || getNumericContent(doc, 'vNF');
@@ -920,25 +921,25 @@ function parseNFe(doc: Element, fileName: string): NotaFiscal {
   const basePIS = pisSummary.base || getNumericContent(findElementByLocalName(icmsTot, 'PIS') || doc, 'vBC');
   const declaredPISPct = pisSummary.declaredPctWeighted || getNumericContent(findElementByLocalName(icmsTot, 'PIS') || doc, 'pPIS');
   // Alíquota calculada: (Valor PIS ÷ Valor Total) × 100
-  const aliquotaPIS = (valorTotal > 0 && valorPIS > 0) ? (valorPIS / valorTotal) * 100 : (declaredPISPct || DEFAULT_PIS_RATE);
+  const aliquotaPIS = (valorTotal > 0 && valorPIS > 0) ? (valorPIS / valorTotal) * 100 : (declaredPISPct > 0 ? declaredPISPct : 0);
 
   // COFINS: cálculo análogo ao PIS
   const cofinsSummary = aggregatePisCofins(doc, 'COFINS');
   const baseCOFINS = cofinsSummary.base || getNumericContent(findElementByLocalName(icmsTot, 'COFINS') || doc, 'vBC');
   const declaredCOFINSPct = cofinsSummary.declaredPctWeighted || getNumericContent(findElementByLocalName(icmsTot, 'COFINS') || doc, 'pCOFINS');
   // Alíquota calculada: (Valor COFINS ÷ Valor Total) × 100
-  const aliquotaCOFINS = (valorTotal > 0 && valorCOFINS > 0) ? (valorCOFINS / valorTotal) * 100 : (declaredCOFINSPct || DEFAULT_COFINS_RATE);
+  const aliquotaCOFINS = (valorTotal > 0 && valorCOFINS > 0) ? (valorCOFINS / valorTotal) * 100 : (declaredCOFINSPct > 0 ? declaredCOFINSPct : 0);
 
   // IPI: extração da alíquota real do XML
   const ipiSummary = aggregateIPI(doc);
   const baseIPI = ipiSummary.base;
   const declaredIPIPct = ipiSummary.declaredPctWeighted;
-  // Usa alíquota declarada no XML, fallback para cálculo reverso, depois padrão
+  // Usa alíquota declarada no XML, fallback para cálculo reverso, depois 0
   const aliquotaIPI = declaredIPIPct > 0 
     ? declaredIPIPct 
     : (baseIPI > 0 && valorIPI > 0) 
       ? (valorIPI / baseIPI) * 100 
-      : DEFAULT_IPI_RATE;
+      : 0;
 
   // DIFAL
   const aliquotaDIFAL = baseICMS > 0 ? (valorDIFAL / baseICMS) * 100 : 0;
