@@ -27,9 +27,17 @@ export function exportToExcel(notas: NotaFiscal[], fileName: string = 'notas_fis
     }
   });
 
+  // Helper function to convert dd/MM/yyyy string to Excel serial date number
+  const parseDate = (dateStr: string): Date | string => {
+    if (!dateStr) return '';
+    const [day, month, year] = dateStr.split('/');
+    if (!day || !month || !year) return '';
+    return new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+  };
+
   // Main sheet: keep same columns/order as the UI table for visual parity
   const data = normalizedNotas.map((nota) => ({
-    'DATA EMISSÃO': nota.dataEmissao || today,
+    'DATA EMISSÃO': parseDate(nota.dataEmissao || today),
     'TIPO NF': nota.tipoOperacao?.toUpperCase() || '',
     'FORNECEDOR/CLIENTE': nota.fornecedorCliente?.toUpperCase() || '',
     'Nº NF-E': nota.tipo === 'NF-e' ? nota.numero : '',
@@ -49,12 +57,12 @@ export function exportToExcel(notas: NotaFiscal[], fileName: string = 'notas_fis
     'ANO': nota.dataEmissao ? new Date(nota.dataEmissao.split('/').reverse().join('-')).getFullYear() : '',
     'REDUZ ICMS': '',
     'MÊS': nota.dataEmissao ? new Date(nota.dataEmissao.split('/').reverse().join('-')).getMonth() + 1 : '',
-    'DATA INSERÇÃO': nota.dataInsercao || today,
+    'DATA INSERÇÃO': parseDate(nota.dataInsercao || today),
     'SITUAÇÃO': (nota.situacao || 'Desconhecida').toUpperCase(),
-    'DATA MUDANÇA': nota.dataMudancaSituacao || '',
+    'DATA MUDANÇA': parseDate(nota.dataMudancaSituacao || ''),
   }));
 
-  const worksheet = XLSX.utils.json_to_sheet(data);
+  const worksheet = XLSX.utils.json_to_sheet(data, { cellDates: true, dateNF: 'dd/mm/yyyy' });
 
   // Aplicar formatação às colunas
   const ref = worksheet['!ref'];
@@ -63,7 +71,6 @@ export function exportToExcel(notas: NotaFiscal[], fileName: string = 'notas_fis
     const currencyHeaders = ['VALOR', 'PIS', 'COFINS', 'IPI', 'ICMS', 'DIFAL', 'PIS ESPERADO', 'COFINS ESPERADO'];
     const percentHeaders = ['ALÍQ. PIS', 'ALÍQ. COF', 'ALÍQ. IPI', 'ALÍQ. ICMS', 'ALÍQ. DIFAL'];
     const numberHeaders = ['Nº NF-E', 'Nº CT-E', 'ANO', 'MÊS'];
-    const dateHeaders = ['DATA EMISSÃO', 'DATA INSERÇÃO', 'DATA MUDANÇA'];
     
     // Centralizar cabeçalhos
     for (let c = range.s.c; c <= range.e.c; c++) {
@@ -111,16 +118,6 @@ export function exportToExcel(notas: NotaFiscal[], fileName: string = 'notas_fis
           if (cell && cell.v !== undefined && cell.v !== '') {
             cell.t = 'n';
             cell.z = '0';
-          }
-        }
-      }
-      
-      if (dateHeaders.includes(header)) {
-        for (let r = range.s.r + 1; r <= range.e.r; r++) {
-          const addr = XLSX.utils.encode_cell({ c, r });
-          const cell = worksheet[addr];
-          if (cell && cell.v) {
-            cell.z = 'DD/MM/YYYY';
           }
         }
       }
