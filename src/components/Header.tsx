@@ -11,7 +11,7 @@ export function Header() {
       <div className="flex items-center gap-6">
         <div className="flex items-center gap-4">
           <img 
-            src="/public/LOGO_PORTO_WPP.jpg-removebg-preview.png" 
+            src="/LOGO_PORTO_WPP.jpg-removebg-preview.png" 
             alt="Porto Alumínio" 
             className="h-32 w-auto"
           />
