@@ -179,8 +179,8 @@ const MAX_MATERIALS_DISPLAY = 1;
  * Adicione aqui os CNPJs da sua empresa para identificação correta
  */
 const EMPRESA_CNPJS = [
-  '05255986000164', // CNPJ principal (sem formatação)
-  // Adicione outros CNPJs/filiais se necessário
+  '36049190000189', // PORTO ALUMINIO - MATRIZ
+  '36049190000260', // PORTO ALUMINIO - FILIAL
 ];
 
 /**
