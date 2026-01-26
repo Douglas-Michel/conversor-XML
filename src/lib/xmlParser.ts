@@ -42,6 +42,8 @@ export interface NotaFiscal {
   id: string;
   tipo: TipoDocumento;
   tipoOperacao: TipoOperacao;
+  tipoNF: string;
+  cfop: string;
   numero: string;
   numeroCTe: string;
   serie: string;
@@ -190,6 +192,159 @@ function isCnpjDaEmpresa(cnpj: string): boolean {
   if (!cnpj) return false;
   const cnpjLimpo = cnpj.replace(/\D/g, '');
   return EMPRESA_CNPJS.some(empresaCnpj => cnpjLimpo === empresaCnpj);
+}
+
+/**
+ * Retorna descrição resumida baseada no CFOP
+ * Agrupa CFOPs similares em categorias comuns
+ */
+function getTipoNFResumido(cfop: string): string {
+  if (!cfop) return '';
+  
+  const codigo = cfop.replace(/\D/g, '');
+  if (codigo.length !== 4) return '';
+  
+  const natureza = codigo.substring(1);
+  
+  // Mapeamento para descrições resumidas/agrupadas
+  const descricoes: { [key: string]: string } = {
+    // Compras
+    '101': 'Compra',
+    '102': 'Compra',
+    '124': 'Compra',
+    '125': 'Compra',
+    
+    // Transferências
+    '151': 'Transferência',
+    '152': 'Transferência',
+    '153': 'Transferência',
+    '154': 'Transferência',
+    '155': 'Transferência',
+    '156': 'Transferência',
+    
+    // Devoluções
+    '201': 'Devolução',
+    '202': 'Devolução',
+    '203': 'Devolução',
+    '204': 'Devolução',
+    '205': 'Devolução',
+    '206': 'Devolução',
+    '207': 'Devolução',
+    '208': 'Devolução',
+    '209': 'Devolução',
+    '410': 'Devolução',
+    '411': 'Devolução',
+    '412': 'Devolução',
+    '413': 'Devolução',
+    '414': 'Devolução',
+    '415': 'Devolução',
+    
+    // Vendas
+    '401': 'Venda',
+    '402': 'Venda',
+    '403': 'Venda',
+    '404': 'Venda',
+    '405': 'Venda',
+    
+    // Remessa
+    '901': 'Remessa',
+    '902': 'Remessa',
+    '903': 'Remessa',
+    '904': 'Remessa',
+    '905': 'Remessa',
+    '906': 'Remessa',
+    '907': 'Remessa',
+    '908': 'Remessa',
+    '909': 'Remessa',
+    
+    // Estorno
+    '201': 'Estorno',
+    '202': 'Estorno',
+    '411': 'Estorno',
+    '412': 'Estorno',
+    
+    // Bonificação
+    '910': 'Bonificação',
+    '911': 'Bonificação',
+    '912': 'Bonificação',
+    '913': 'Bonificação',
+    
+    // Brinde/Doação
+    '910': 'Brinde',
+    
+    // Outras
+    '949': 'Outras',
+  };
+  
+  return descricoes[natureza] || '';
+}
+
+/**
+ * Retorna descrição completa do CFOP para tooltip
+ * @param cfop - Código CFOP (4 dígitos)
+ * @returns Descrição completa da operação
+ */
+export function getDescricaoCFOP(cfop: string): string {
+  if (!cfop) return 'CFOP não informado';
+  
+  const codigo = cfop.replace(/\D/g, '');
+  if (codigo.length !== 4) return 'CFOP inválido';
+  
+  const ambito = codigo[0];
+  const natureza = codigo.substring(1);
+  
+  // Descrições completas
+  const descricoes: { [key: string]: string } = {
+    '101': 'Compra para industrialização ou produção rural',
+    '102': 'Compra para comercialização',
+    '124': 'Industrialização efetuada por outra empresa',
+    '125': 'Industrialização efetuada por encomenda',
+    '151': 'Transferência para industrialização',
+    '152': 'Transferência para comercialização',
+    '153': 'Transferência de produção do estabelecimento',
+    '154': 'Transferência de mercadoria adquirida de terceiros',
+    '155': 'Transferência para retorno',
+    '201': 'Devolução de venda de produção do estabelecimento',
+    '202': 'Devolução de venda de mercadoria adquirida de terceiros',
+    '203': 'Devolução de venda de produção em bonificação',
+    '204': 'Devolução de venda de mercadoria adquirida em bonificação',
+    '401': 'Venda de produção do estabelecimento',
+    '402': 'Venda de mercadoria adquirida ou recebida de terceiros',
+    '403': 'Venda de mercadoria adquirida ou recebida de terceiros (ST)',
+    '405': 'Venda de mercadoria em consignação',
+    '410': 'Devolução de compra para industrialização',
+    '411': 'Devolução de compra para comercialização',
+    '412': 'Devolução de bem do ativo imobilizado',
+    '413': 'Devolução de mercadoria destinada ao uso e consumo',
+    '414': 'Remessa de produção do estabelecimento para venda fora do estabelecimento',
+    '415': 'Remessa de mercadoria adquirida de terceiros para venda fora do estabelecimento',
+    '551': 'Venda de bem do ativo imobilizado',
+    '901': 'Remessa para industrialização por encomenda',
+    '902': 'Retorno de mercadoria utilizada na industrialização por encomenda',
+    '903': 'Entrada de mercadoria remetida para industrialização e não aplicada no referido processo',
+    '904': 'Retorno de remessa para venda fora do estabelecimento',
+    '905': 'Entrada de mercadoria recebida para depósito',
+    '906': 'Retorno de mercadoria remetida para depósito',
+    '907': 'Retorno simbólico de mercadoria',
+    '910': 'Entrada de bonificação, doação ou brinde',
+    '911': 'Entrada de amostra grátis',
+    '949': 'Outra entrada de mercadoria não especificada',
+  };
+  
+  const descricao = descricoes[natureza] || `Operação ${natureza}`;
+  
+  // Adiciona informação do âmbito
+  let ambitoTexto = '';
+  switch (ambito) {
+    case '1': ambitoTexto = ' (dentro do estado)'; break;
+    case '2': ambitoTexto = ' (interestadual)'; break;
+    case '3': ambitoTexto = ' (exterior)'; break;
+    case '5': ambitoTexto = ' (dentro do estado)'; break;
+    case '6': ambitoTexto = ' (interestadual)'; break;
+    case '7': ambitoTexto = ' (exterior)'; break;
+  }
+  
+  return descricao + ambitoTexto;
 }
 
 /**
@@ -891,6 +1046,12 @@ function parseNFe(doc: Element, fileName: string): NotaFiscal {
   // Chave de acesso
   const chaveAcesso = infNFe?.getAttribute('Id')?.replace('NFe', '') ?? '';
   
+  // CFOP - Extrai do primeiro item
+  const primeiroItemDet = getElementsByLocalName(doc, 'det')[0];
+  const prodElement = primeiroItemDet ? findElementByLocalName(primeiroItemDet, 'prod') : null;
+  const cfop = getTextContent(prodElement, 'CFOP') || '';
+  const tipoNF = getTipoNFResumido(cfop);
+  
   // Parceiro (fornecedor ou cliente conforme tipo de operação)
   const parceiro = tipoOperacao === 'Saída' ? dest : emit;
   const nome = getTextContent(parceiro, 'xNome');
@@ -976,6 +1137,8 @@ function parseNFe(doc: Element, fileName: string): NotaFiscal {
     id: crypto.randomUUID(),
     tipo: 'NF-e',
     tipoOperacao,
+    tipoNF,
+    cfop,
     numero: getTextContent(ide, 'nNF'),
     numeroCTe: '',
     serie: getTextContent(ide, 'serie'),
@@ -1051,6 +1214,10 @@ function parseCTe(doc: Element, fileName: string): NotaFiscal {
   // Chave de acesso
   const chaveAcesso = infCte?.getAttribute('Id')?.replace('CTe', '') ?? '';
   
+  // CFOP - Para CT-e geralmente está no ide
+  const cfop = getTextContent(ide, 'CFOP') || '';
+  const tipoNF = getTipoNFResumido(cfop);
+  
   // Parceiro (cliente ou fornecedor conforme tipo de operação)
   const parceiro = tipoOperacao === 'Saída' ? (dest || rem) : emit;
   const nome = getTextContent(parceiro, 'xNome');
@@ -1106,6 +1273,8 @@ function parseCTe(doc: Element, fileName: string): NotaFiscal {
     id: crypto.randomUUID(),
     tipo: 'CT-e',
     tipoOperacao,
+    tipoNF,
+    cfop,
     numero: getTextContent(ide, 'nCT'),
     numeroCTe: getTextContent(ide, 'nCT'),
     serie: getTextContent(ide, 'serie'),
@@ -1220,6 +1389,8 @@ export function parseNFeXML(xmlContent: string, fileName: string): NotaFiscal | 
         id: crypto.randomUUID(),
         tipo: 'NF-e',
         tipoOperacao: 'Saída',
+        tipoNF: '',
+        cfop: '',
         numero: '',
         numeroCTe: '',
         serie: '',

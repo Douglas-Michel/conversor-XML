@@ -1,7 +1,7 @@
 import { motion } from 'framer-motion';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { NotaFiscal, formatCurrency, formatPercent } from '@/lib/xmlParser';
+import { NotaFiscal, formatCurrency, formatPercent, getDescricaoCFOP } from '@/lib/xmlParser';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import {
   Table,
@@ -71,12 +71,29 @@ export function DataTable({ data }: DataTableProps) {
                     {nota.dataEmissao}
                   </TableCell>
                   <TableCell className="text-center">
-                    <Badge 
-                      variant={nota.tipoOperacao === 'Entrada' ? 'blue' : 'destructive'}
-                      className="text-xs whitespace-nowrap"
-                    >
-                      {nota.tipoOperacao}
-                    </Badge>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <div className="flex flex-col gap-1.5 items-center py-1">
+                          <div className="text-xs font-medium text-primary">
+                            {nota.tipo}{nota.tipoNF ? ` (${nota.tipoNF})` : ''}
+                          </div>
+                          <Badge 
+                            variant={nota.tipoOperacao === 'Entrada' ? 'blue' : 'destructive'}
+                            className="text-[10px] px-2 py-0.5"
+                          >
+                            {nota.tipoOperacao}
+                          </Badge>
+                        </div>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <div className="space-y-1">
+                          <p className="font-semibold text-xs">CFOP: {nota.cfop || 'N/A'}</p>
+                          <p className="text-xs">
+                            {nota.cfop ? getDescricaoCFOP(nota.cfop) : 'Informação não disponível'}
+                          </p>
+                        </div>
+                      </TooltipContent>
+                    </Tooltip>
                   </TableCell>
                   <TableCell className="max-w-[250px] truncate text-sm" title={nota.fornecedorCliente}>
                     {nota.fornecedorCliente}

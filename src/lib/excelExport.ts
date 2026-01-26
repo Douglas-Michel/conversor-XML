@@ -37,31 +37,39 @@ export function exportToExcel(notas: NotaFiscal[], fileName: string = 'notas_fis
   };
 
   // Main sheet: keep same columns/order as the UI table for visual parity
-  const data = normalizedNotas.map((nota) => ({
-    'DATA EMISSÃO': parseDate(nota.dataEmissao || today),
-    'TIPO NF': nota.tipoOperacao?.toUpperCase() || '',
-    'FORNECEDOR/CLIENTE': nota.fornecedorCliente?.toUpperCase() || '',
-    'Nº NF-E': nota.tipo === 'NF-e' ? nota.numero : '',
-    'Nº CT-E': nota.numeroCTe || '',
-    'MATERIAL': nota.material?.toUpperCase() || '',
-    'VALOR': nota.valorTotal,
-    'ALÍQ. PIS': nota.aliquotaPIS !== undefined ? nota.aliquotaPIS / 100 : null,
-    'PIS': nota.valorPIS,
-    'ALÍQ. COF': nota.aliquotaCOFINS !== undefined ? nota.aliquotaCOFINS / 100 : null,
-    'COFINS': nota.valorCOFINS,
-    'ALÍQ. IPI': nota.aliquotaIPI !== undefined ? nota.aliquotaIPI / 100 : null,
-    'IPI': nota.valorIPI,
-    'ALÍQ. ICMS': nota.aliquotaICMS !== undefined ? nota.aliquotaICMS / 100 : null,
-    'ICMS': nota.valorICMS,
-    'ALÍQ. DIFAL': nota.aliquotaDIFAL !== undefined ? nota.aliquotaDIFAL / 100 : null,
-    'DIFAL': nota.valorDIFAL,
-    'ANO': nota.dataEmissao ? new Date(nota.dataEmissao.split('/').reverse().join('-')).getFullYear() : '',
-    'REDUZ ICMS': '',
-    'MÊS': nota.dataEmissao ? new Date(nota.dataEmissao.split('/').reverse().join('-')).getMonth() + 1 : '',
-    'DATA INSERÇÃO': parseDate(nota.dataInsercao || today),
-    'SITUAÇÃO': (nota.situacao || 'Desconhecida').toUpperCase(),
-    'DATA MUDANÇA': parseDate(nota.dataMudancaSituacao || ''),
-  }));
+  const data = normalizedNotas.map((nota) => {
+    // Formata Tipo NF: NF-e (Remessa) com quebra de linha
+    let tipoNFTexto = nota.tipo || 'NF-e';
+    if (nota.tipoNF) {
+      tipoNFTexto = `${nota.tipo} (${nota.tipoNF})`;
+    }
+    
+    return {
+      'DATA EMISSÃO': parseDate(nota.dataEmissao || today),
+      'TIPO NF': tipoNFTexto,
+      'FORNECEDOR/CLIENTE': nota.fornecedorCliente?.toUpperCase() || '',
+      'Nº NF-E': nota.tipo === 'NF-e' ? nota.numero : '',
+      'Nº CT-E': nota.numeroCTe || '',
+      'MATERIAL': nota.material?.toUpperCase() || '',
+      'VALOR': nota.valorTotal,
+      'ALÍQ. PIS': nota.aliquotaPIS !== undefined ? nota.aliquotaPIS / 100 : null,
+      'PIS': nota.valorPIS,
+      'ALÍQ. COF': nota.aliquotaCOFINS !== undefined ? nota.aliquotaCOFINS / 100 : null,
+      'COFINS': nota.valorCOFINS,
+      'ALÍQ. IPI': nota.aliquotaIPI !== undefined ? nota.aliquotaIPI / 100 : null,
+      'IPI': nota.valorIPI,
+      'ALÍQ. ICMS': nota.aliquotaICMS !== undefined ? nota.aliquotaICMS / 100 : null,
+      'ICMS': nota.valorICMS,
+      'ALÍQ. DIFAL': nota.aliquotaDIFAL !== undefined ? nota.aliquotaDIFAL / 100 : null,
+      'DIFAL': nota.valorDIFAL,
+      'ANO': nota.dataEmissao ? new Date(nota.dataEmissao.split('/').reverse().join('-')).getFullYear() : '',
+      'REDUZ ICMS': '',
+      'MÊS': nota.dataEmissao ? new Date(nota.dataEmissao.split('/').reverse().join('-')).getMonth() + 1 : '',
+      'DATA INSERÇÃO': parseDate(nota.dataInsercao || today),
+      'SITUAÇÃO': (nota.situacao || 'Desconhecida').toUpperCase(),
+      'DATA MUDANÇA': parseDate(nota.dataMudancaSituacao || ''),
+    };
+  });
 
   const worksheet = XLSX.utils.json_to_sheet(data, { cellDates: true, dateNF: 'dd/mm/yyyy' });
 
@@ -127,7 +135,7 @@ export function exportToExcel(notas: NotaFiscal[], fileName: string = 'notas_fis
 
   const columnWidths = [
     { wch: 12 },  // Data Emissão
-    { wch: 10 },  // Tipo NF
+    { wch: 20 },  // Tipo NF (aumentado para NF-e (Remessa))
     { wch: 40 },  // Fornecedor/Cliente
     { wch: 12 },  // Nº NF-e
     { wch: 12 },  // Nº CT-e
